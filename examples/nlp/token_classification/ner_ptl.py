@@ -12,8 +12,7 @@ from torch import optim
 from torch.utils.data import DataLoader
 from torchvision.datasets import MNIST
 
-from pytorch_lightning import _logger as log
-from pytorch_lightning.core import LightningModule
+import pytorch_lightning as pl
 
 from transformers import BertModel
 from nemo.collections.nlp.data.tokenizers.bert_tokenizer import NemoBertTokenizer
@@ -21,10 +20,11 @@ from nemo.backends.pytorch.common.parts import MultiLayerPerceptron
 from nemo.collections.nlp.utils.functional_utils import gelu
 from nemo.collections.nlp.utils.transformer_utils import transformer_weights_init
 from nemo.collections.nlp.data import BertTokenClassificationDataset
+from typing import Optional, Dict
 
 ACT2FN = {"gelu": gelu, "relu": nn.functional.relu}
 
-class NERModel(LightningModule):
+class NERModel(pl.LightningModule):
     """
     Sample model to show how to define a template.
 
@@ -45,9 +45,9 @@ class NERModel(LightningModule):
     """
 
     def __init__(self,
-                 batch_size,
-                 learning_rate,
-                 optimizer_name,
+                 # batch_size,
+                 # learning_rate,
+                 # optimizer_name,
                  data_dir,
                  hidden_size,
                  num_classes,
@@ -55,7 +55,7 @@ class NERModel(LightningModule):
                  activation='relu',
                  log_softmax=True,
                  dropout=0.0,
-                 use_transformer_pretrained=True):
+                 use_transformer_pretrained=True
                  ):
         # init superclass
         super().__init__()
@@ -242,4 +242,9 @@ class TokenClassifier(nn.Module):
         transform = self.norm(hidden_states)
         logits = self.mlp(transform)
         return logits
+
+if __name__ == '__main__':
+    ner = NERModel()
+    trainer = pl.Trainer(fast_dev_run=True)
+    trainer.fit(ner)
 
