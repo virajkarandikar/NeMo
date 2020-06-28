@@ -45,11 +45,6 @@ class NERModel(pl.LightningModule):
     """
 
     def __init__(self,
-                 # batch_size,
-                 # learning_rate,
-                 # optimizer_name,
-                 data_dir,
-                 hidden_size,
                  num_classes,
                  pretrained_model_name='bert-base-cased',
                  activation='relu',
@@ -59,9 +54,10 @@ class NERModel(pl.LightningModule):
                  ):
         # init superclass
         super().__init__()
-        self.bert_model = BertModel(pretrained_model=pretrained_model_name)
+        self.bert_model = BertModel.from_pretrained(pretrained_model_name)
+        self.hidden_size = self.bert_model.config.hidden_size
         self.tokenizer = NemoBertTokenizer(pretrained_model=pretrained_model_name)
-        self.classier = TokenClassifier(hidden_size=hidden_size,num_classes=num_classes, activation=activation, log_softmax=log_softmax, dropout=dropout, use_transformer_pretrained=use_transformer_pretrained)
+        self.classifier = TokenClassifier(hidden_size=self.hidden_size,num_classes=num_classes, activation=activation, log_softmax=log_softmax, dropout=dropout, use_transformer_pretrained=use_transformer_pretrained)
 
         self.loss = nn.CrossEntropyLoss()
         # This will be set by setup_training_datai
@@ -78,7 +74,7 @@ class NERModel(pl.LightningModule):
         No special modification required for Lightning, define it as you normally would
         in the `nn.Module` in vanilla PyTorch.
         """
-        hidden_states = self.bert_model(input_ids, token_type_ids, attention_mask)
+        hidden_states = self.bert_model(input_ids, token_type_ids, attention_mask)[0]
         logits = self.classifier(hidden_states)
         return logits
 
@@ -90,7 +86,12 @@ class NERModel(pl.LightningModule):
         # forward pass
         input_ids, input_type_ids, input_mask, loss_mask, subtokens_mask, labels = batch
         logits = self(input_ids=input_ids, token_type_ids=input_type_ids, attention_mask=input_mask)
-        loss = self.loss(logits=logits, labels=labels)
+
+        #TODO replace with loss module
+        logits_flatten = torch.flatten(logits, start_dim=0, end_dim=-2)
+        labels_flatten = torch.flatten(labels, start_dim=0, end_dim=-1)
+        loss = self.loss(logits_flatten, labels_flatten)
+
         tensorboard_logs = {'train_loss': loss}
         return {'loss': loss, 'log': tensorboard_logs}
 
@@ -101,7 +102,11 @@ class NERModel(pl.LightningModule):
         """
         input_ids, input_type_ids, input_mask, loss_mask, subtokens_mask, labels = batch
         logits = self(input_ids=input_ids, token_type_ids=input_type_ids, attention_mask=input_mask)
-        val_loss = self.loss(logits=logits, labels=labels)
+
+        logits_flatten = torch.flatten(logits, start_dim=0, end_dim=-2)
+        labels_flatten = torch.flatten(labels, start_dim=0, end_dim=-1)
+        val_loss = self.loss(logits_flatten, labels_flatten)
+
         tensorboard_logs = {'val_loss': val_loss}
         # TODO - add eval - callback?
         # labels_hat = torch.argmax(y_hat, dim=1)
@@ -124,27 +129,34 @@ class NERModel(pl.LightningModule):
     #     tensorboard_logs = {'test_loss': avg_loss, 'test_acc': test_acc}
     #     return {'test_loss': avg_loss, 'log': tensorboard_logs}
 
-    def setup_training_data(self, train_data_layer_params: Optional[Dict]):
+    def setup_training_data(self, data_dir, train_data_layer_params: Optional[Dict]):
         if 'shuffle' not in train_data_layer_params:
             train_data_layer_params['shuffle'] = True
-        self.__train_dl = self.__setup_dataloader_from_config(config=train_data_layer_params)
+        text_file = os.path.join(data_dir, 'text_train.txt')
+        labels_file = os.path.join(data_dir, 'labels_train.txt')
+        self.__train_dl = self.__setup_dataloader_ner(text_file, labels_file)
 
-    def setup_validation_data(self, val_data_layer_params: Optional[Dict]):
+    def setup_validation_data(self, data_dir, val_data_layer_params: Optional[Dict]):
         if 'shuffle' not in val_data_layer_params:
             val_data_layer_params['shuffle'] = False
-        self.__val_dl = self.__setup_dataloader_from_config(config=val_data_layer_params)
+        text_file = os.path.join(data_dir, 'text_dev.txt')
+        labels_file = os.path.join(data_dir, 'labels_dev.txt')
+        self.__val_dl = self.__setup_dataloader_ner(text_file, labels_file)
 
-    def setup_test_data(self, test_data_layer_params: Optional[Dict]):
-        if 'shuffle' not in test_data_layer_params:
-            test_data_layer_params['shuffle'] = False
-        self.__test_dl = self.__setup_dataloader_from_config(config=test_data_layer_params)
+    # def setup_test_data(self, test_data_layer_params: Optional[Dict]):
+    #     if 'shuffle' not in test_data_layer_params:
+    #         test_data_layer_params['shuffle'] = False
+    #     self.__test_dl = self.__setup_dataloader_from_config(config=test_data_layer_params)
 
-    def setup_optimization(self, optim_params: Optional[Dict]):
-        self.__optimizer = torch.optim.Adam(self.parameters(), lr=optim_params['lr'])
+    def setup_optimization(self, optim_params: Optional[Dict], optimizer='adam'):
+        if optimizer == 'adam':
+            self.__optimizer = torch.optim.Adam(self.parameters(), lr=optim_params['lr'])
+        else:
+            raise ValueError (f'TODO {optimizer}')
 
-    def __setup_dataloader_nemo(text_file,
+    def __setup_dataloader_ner(self, text_file,
         label_file,
-        max_seq_length,
+        max_seq_length=128,
         pad_label='O',
         label_ids=None,
         num_samples=-1,
@@ -153,7 +165,7 @@ class NERModel(pl.LightningModule):
         use_cache=False,
         shuffle = False,
         batch_size = 64,
-        num_workers = -1,
+        num_workers = 0,
     ):
 
         dataset = BertTokenClassificationDataset(
@@ -229,7 +241,7 @@ class TokenClassifier(nn.Module):
         self.act = ACT2FN[activation]
         self.norm = nn.LayerNorm(hidden_size, eps=1e-12)
         self.mlp = MultiLayerPerceptron(
-            hidden_size, num_classes, self._device, num_layers=1, activation=activation, log_softmax=log_softmax
+            hidden_size, num_classes, num_layers=1, activation=activation, log_softmax=log_softmax
         )
         self.dropout = nn.Dropout(dropout)
         if use_transformer_pretrained:
@@ -243,8 +255,14 @@ class TokenClassifier(nn.Module):
         logits = self.mlp(transform)
         return logits
 
+
+
 if __name__ == '__main__':
-    ner = NERModel()
-    trainer = pl.Trainer(fast_dev_run=True)
-    trainer.fit(ner)
+    ner_model = NERModel(num_classes=9)
+    ner_model.setup_training_data(data_dir='/home/ebakhturina/data/ner/conell/', train_data_layer_params={'shuffle':True})
+    ner_model.setup_validation_data(data_dir='/home/ebakhturina/data/ner/conell/', val_data_layer_params={'shuffle':False})
+    ner_model.setup_optimization(optim_params={'lr': 0.0003})
+    trainer = pl.Trainer(
+        val_check_interval=35, amp_level='O1', precision=16, gpus=2, max_epochs=123, distributed_backend='ddp')
+    trainer.fit(ner_model)
 
