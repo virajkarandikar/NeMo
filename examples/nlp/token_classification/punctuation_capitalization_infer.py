@@ -80,6 +80,8 @@ parser.add_argument(
         "what is the weather in",
         "what is the name of", 
         "the next flight is going to be at", 
+        "why are they",
+        "how many"
     ],
     help="Example: --queries 'san francisco' --queries 'la'",
 )
