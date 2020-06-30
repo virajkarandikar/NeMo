@@ -81,7 +81,13 @@ parser.add_argument(
         "what is the name of", 
         "the next flight is going to be at", 
         "why are they",
-        "how many"
+        "how many",
+        "hell",
+        "hello",
+        "nice to see you how can i help you",
+        "find me the distance",
+        "what is the destination place",
+        "he will go to paris and i want to come too"
     ],
     help="Example: --queries 'san francisco' --queries 'la'",
 )
@@ -283,6 +289,6 @@ else:
                 file_for_errors.write('Pred: ' + prediction + '\n')
                 file_for_errors.write('True: ' + ground_truth + '\n\n')
 
-logging.info(f'Number of correct predictions: {correct}')
-logging.info(f'Number of wrong predictions: {wrong}')
-logging.info(f'Incorrect examples saved to : {file_for_errors_path}')
+    logging.info(f'Number of correct predictions: {correct}')
+    logging.info(f'Number of wrong predictions: {wrong}')
+    logging.info(f'Incorrect examples saved to : {file_for_errors_path}')
