@@ -110,6 +110,8 @@ class VarianceAdaptor(NeuralModule):
         energy_kernel_size=3,
         energy_min=0.0,
         energy_max=600.0,
+        vocab=None,
+        # use_guassian_embed=False,
     ):
         """
         FastSpeech 2 variance adaptor, which adds information like duration, pitch, etc. to the phoneme encoding.
@@ -144,7 +146,10 @@ class VarianceAdaptor(NeuralModule):
         self.duration_predictor = VariancePredictor(
             d_model=d_model, d_inner=dur_d_hidden, kernel_size=dur_kernel_size, dropout=dropout
         )
-        self.length_regulator = LengthRegulator2()
+        if vocab is not None:
+            self.length_regulator = GaussianEmbedding(vocab)
+        else:
+            self.length_regulator = LengthRegulator2()
 
         self.pitch = pitch
         self.energy = energy
@@ -204,10 +209,10 @@ class VarianceAdaptor(NeuralModule):
         log_dur_preds = self.duration_predictor(x)
         log_dur_preds.masked_fill_(~get_mask_from_lengths(x_len), 0)
         # Output is Batch, Time
-        if self.training:
+        if dur_target is not None:
             dur_out = self.length_regulator(x, dur_target)
         else:
-            dur_preds = torch.clamp_min(torch.exp(log_dur_preds) - 1, 0).long()
+            dur_preds = torch.clamp_min(torch.round(torch.exp(log_dur_preds)) - 1, 0).long()
             if not torch.sum(dur_preds, dim=1).bool().all():
                 logging.error("Duration prediction failed on this batch. Settings to 1s")
                 dur_preds += 1
@@ -222,9 +227,11 @@ class VarianceAdaptor(NeuralModule):
         pitch_preds = None
         if self.pitch:
             pitch_preds = self.pitch_predictor(dur_out)
-            if self.training:
+            pitch_preds.masked_fill_(~get_mask_from_lengths(spec_len), 0)
+            if pitch_target is not None:
                 pitch_out = self.pitch_lookup(torch.bucketize(pitch_target, self.pitch_bins))
             else:
+                # pitch_preds = torch.clamp_min(torch.exp(lg_pitch_preds) - 1, 0)
                 pitch_out = self.pitch_lookup(torch.bucketize(pitch_preds, self.pitch_bins))
             out += pitch_out
         out *= get_mask_from_lengths(spec_len).unsqueeze(-1)
@@ -233,7 +240,7 @@ class VarianceAdaptor(NeuralModule):
         energy_preds = None
         if self.energy:
             energy_preds = self.energy_predictor(dur_out)
-            if self.training:
+            if energy_target is not None:
                 energy_out = self.energy_lookup(torch.bucketize(energy_target, self.energy_bins))
             else:
                 energy_out = self.energy_lookup(torch.bucketize(energy_preds, self.energy_bins))
@@ -241,6 +248,50 @@ class VarianceAdaptor(NeuralModule):
         out *= get_mask_from_lengths(spec_len).unsqueeze(-1)
 
         return out, log_dur_preds, pitch_preds, energy_preds, spec_len
+
+
+class GaussianEmbedding(nn.Module):
+    """Gaussian embedding layer.."""
+
+    EPS = 1e-6
+
+    def __init__(self, vocab, sigma_c=2.0):
+        super().__init__()
+
+        self.pad = vocab.pad
+        self.sigma_c = sigma_c
+
+    def forward(self, text, durs):
+        """
+        durs : Shape: Batch x Text Length
+        """
+        total_time = torch.max(durs.sum(1))
+
+        # Calculate mean from durations
+        mean = (durs / 2.0) + torch.cumsum(durs, dim=-1)  # B x SL
+        mean = mean.unsqueeze(1).repeat(1, total_time, 1)  # B X TL X SL
+
+        # Calculate sigma from durations
+        sigmas = durs
+        sigmas = sigmas.float() / self.sigma_c
+        sigmas = sigmas.unsqueeze(1).repeat(1, total_time, 1) + self.EPS
+        assert mean.shape == sigmas.shape
+
+        # Times indexes
+        t_ind = torch.arange(total_time, device=mean.device).view(1, -1, 1).repeat(durs.shape[0], 1, durs.shape[-1])
+        t_ind = t_ind.float() + 0.5
+
+        # ns = slice(None)
+        # if self.merge_blanks:
+        #     ns = slice(1, None, 2)
+
+        # Weights: [B,T,N]
+        distribution = torch.distributions.normal.Normal(mean, sigmas)
+        probs = distribution.log_prob(t_ind).exp()
+
+        # Normalize distribution per spectorgram frame
+        probs = probs / (probs.sum(-1, keepdim=True) + self.EPS)
+        return torch.matmul(probs, text)
 
 
 @experimental
