@@ -418,7 +418,7 @@ class SpeakerDecoder(NeuralModule, Exportable):
         self.final = nn.Linear(shapes[-1], self._num_classes, bias=bias)
 
         self.apply(lambda x: init_weights(x, mode=init_mode))
-
+        # nn.Conv1d(inp_shape,out_shape,kernel_size=1,dilation=1),
     def affineLayer(self, inp_shape, out_shape, learn_mean=True):
         layer = nn.Sequential(
             nn.Linear(inp_shape, out_shape),

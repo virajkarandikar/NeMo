@@ -106,6 +106,7 @@ class AttentivePoolingLayer(nn.Module):
         self.channel_activation = nn.ReLU()
         self.norm = nn.BatchNorm1d(attention_channels)
         self.scalar_attn = nn.Conv1d(attention_channels,input_channels,kernel_size=1,dilation=1)
+        self.attn_bn = nn.BatchNorm1d(self.feat_in)
 
         self.apply(lambda x: init_weights(x, mode=init_mode))
     
@@ -146,6 +147,7 @@ class AttentivePoolingLayer(nn.Module):
         mean, std = self.compute_stats(x, attn)
         # Append mean and std of the batch
         pooled_stats = torch.cat((mean, std), dim=1)
+        pooled_stats = self.attn_bn(pooled_stats)
 
         return pooled_stats
 
