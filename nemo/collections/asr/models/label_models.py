@@ -84,6 +84,12 @@ class EncDecSpeakerLabelModel(ModelPT, ExportableEncDecModel):
         self.preprocessor = EncDecSpeakerLabelModel.from_config_dict(cfg.preprocessor)
         self.encoder = EncDecSpeakerLabelModel.from_config_dict(cfg.encoder)
         self.decoder = EncDecSpeakerLabelModel.from_config_dict(cfg.decoder)
+
+        if hasattr(self._cfg, 'spec_augment') and self._cfg.spec_augment is not None:
+            self.spec_augmentation = EncDecSpeakerLabelModel.from_config_dict(self._cfg.spec_augment)
+        else:
+            self.spec_augmentation = None
+
         if 'angular' in cfg.decoder and cfg.decoder['angular']:
             logging.info("Training with Angular Softmax Loss")
             scale = cfg.loss.scale
@@ -100,7 +106,7 @@ class EncDecSpeakerLabelModel(ModelPT, ExportableEncDecModel):
             augmentor = process_augmentations(config['augmentor'])
         else:
             augmentor = None
-
+        
         featurizer = WaveformFeaturizer(
             sample_rate=config['sample_rate'], int_values=config.get('int_values', False), augmentor=augmentor
         )
@@ -190,6 +196,8 @@ class EncDecSpeakerLabelModel(ModelPT, ExportableEncDecModel):
         processed_signal, processed_signal_len = self.preprocessor(
             input_signal=input_signal, length=input_signal_length,
         )
+        if self.spec_augmentation is not None and self.training:
+            processed_signal = self.spec_augmentation(input_spec=processed_signal)
 
         encoded, _ = self.encoder(audio_signal=processed_signal, length=processed_signal_len)
         logits, embs = self.decoder(encoder_output=encoded)
@@ -347,6 +355,7 @@ class ExtractSpeakerEmbeddingsModel(EncDecSpeakerLabelModel):
 
     def test_step(self, batch, batch_ix):
         audio_signal, audio_signal_len, labels, slices = batch
+        a
         _, embs = self.forward(input_signal=audio_signal, input_signal_length=audio_signal_len)
         return {'embs': embs, 'labels': labels, 'slices': slices}
 
