@@ -61,8 +61,8 @@ def _get_ties_graph():
 def _get_year_graph():
     """
     Transducer for year, only from 1000 - 2999 e.g.
-    1290-> twelve nineteen
-    2000 - 2009 will be verbalized as two thousand..
+    1290 -> twelve nineteen
+    2000 - 2009 will be verbalized as two thousand.
     """
 
     graph_ties = _get_ties_graph()

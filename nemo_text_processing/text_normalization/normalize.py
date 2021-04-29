@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import itertools
+import os
 from argparse import ArgumentParser
 from collections import OrderedDict
 from typing import List
@@ -21,6 +22,9 @@ from nemo_text_processing.text_normalization.taggers.tokenize_and_classify impor
 from nemo_text_processing.text_normalization.token_parser import PRESERVE_ORDER_KEY, TokenParser
 from nemo_text_processing.text_normalization.verbalizers.verbalize_final import VerbalizeFinalFst
 from tqdm import tqdm
+
+from nemo.collections import asr as nemo_asr
+from nemo.collections.asr.metrics.wer import word_error_rate
 
 try:
     import pynini
@@ -99,6 +103,36 @@ class Normalizer:
             return output
         raise ValueError()
 
+    def normalize_with_audio(self, text: str, verbose: bool) -> str:
+        """
+        Main function. Normalizes tokens from written to spoken form
+            e.g. 12 kg -> twelve kilograms
+        Args:
+            text: string that may include semiotic classes
+            verbose: whether to print intermediate meta information
+        Returns: spoken form
+        """
+        text = text.strip()
+        if not text:
+            if verbose:
+                print(text)
+            return text
+        text = pynini.escape(text)
+        tagged_lattice = self.find_tags(text)
+        tagged_texts = self.select_all_semiotic_tags(tagged_lattice)
+        normalized_texts = []
+        for tagged_text in tagged_texts:
+            self.parser(tagged_text)
+            tokens = self.parser.parse()
+            tags_reordered = self.generate_permutations(tokens)
+            for tagged_text in tags_reordered:
+                tagged_text = pynini.escape(tagged_text)
+                verbalizer_lattice = self.find_verbalizer(tagged_text)
+                if verbalizer_lattice.num_states() == 0:
+                    continue
+                normalized_texts.append(self.select_verbalizer(verbalizer_lattice))
+        return normalized_texts
+
     def _permute(self, d: OrderedDict) -> List[str]:
         """
         Creates reorderings of dictionary elements and serializes as strings
@@ -170,6 +204,17 @@ class Normalizer:
         lattice = text @ self.tagger.fst
         return lattice
 
+    def select_all_semiotic_tags(self, lattice: 'pynini.FstLike') -> List[str]:
+        all_semiotic_tags = []
+        all = lattice.paths("utf8")
+
+        semiotic_classes = ['date', 'cardinal', 'ordinal', 'decimal', 'money', 'time', 'telephone', 'electronic']
+        for item in all.items():
+            for semiotic in semiotic_classes:
+                if semiotic in item[1]:
+                    all_semiotic_tags.append(item[1])
+        return all_semiotic_tags
+
     def select_tag(self, lattice: 'pynini.FstLike') -> str:
         """
         Given tagged lattice return shortest path
@@ -210,15 +255,59 @@ class Normalizer:
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument("input_string", help="input string", type=str)
+    # parser.add_argument("input_string", help="input string", type=str)
+    parser.add_argument(
+        "--input_string",
+        help="input string",
+        type=str,
+        default="and after a long interval his dead body was discovered, shockingly disfigured, in a ditch. This was in 1802.",
+    )
     parser.add_argument(
         "--input_case", help="input capitalization", choices=["lower_cased", "cased"], default="lower_cased", type=str
     )
     parser.add_argument("--verbose", help="print info for debugging", action='store_true')
+    parser.add_argument(
+        '--model', type=str, default='QuartzNet15x5Base-En', help='Pre-trained model name or path to model checkpoint'
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
     normalizer = Normalizer(input_case=args.input_case)
-    print(normalizer.normalize(args.input_string, verbose=args.verbose))
+    # print(normalizer.normalize(args.input_string, verbose=args.verbose))
+
+    audio = '/mnt/sdb/DATA/normalization/wavs_16000/lj_speech/LJ008-0149.wav'
+    model = 'QuartzNet15x5Base-En'
+
+    if args.model is None:
+        print(f"No model provided, vocabulary won't be used")
+    elif os.path.exists(args.model):
+        asr_model = nemo_asr.models.EncDecCTCModel.restore_from(args.model)
+        vocabulary = asr_model.cfg.decoder.vocabulary
+    elif args.model in nemo_asr.models.EncDecCTCModel.get_available_model_names():
+        asr_model = nemo_asr.models.EncDecCTCModel.from_pretrained(args.model)
+        vocabulary = asr_model.cfg.decoder.vocabulary
+    else:
+        raise ValueError(
+            f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
+        )
+    transcript = asr_model.transcribe([audio])[0]
+
+    print(f'input     : {args.input_string}')
+    print(f'transcript: {transcript}')
+    print('=' * 20)
+
+    normalized_texts = normalizer.normalize_with_audio(args.input_string, verbose=args.verbose)
+
+    if len(normalized_texts) == 0:
+        raise ValueError()
+
+    for i in range(len(normalized_texts)):
+        normalized_texts[i] = normalized_texts[i].replace(' ,', ',').replace(' .', '.')
+    normalized_texts = set(normalized_texts)
+
+    print('normalized:')
+    for text in normalized_texts:
+        wer = round(word_error_rate([transcript], [text], use_cer=True) * 100, 2)
+        print(text, wer)
