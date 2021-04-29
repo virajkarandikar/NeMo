@@ -13,7 +13,10 @@
 # limitations under the License.
 
 import itertools
+<<<<<<< HEAD
 import os
+=======
+>>>>>>> main
 from argparse import ArgumentParser
 from collections import OrderedDict
 from typing import List
@@ -23,6 +26,7 @@ from nemo_text_processing.text_normalization.token_parser import PRESERVE_ORDER_
 from nemo_text_processing.text_normalization.verbalizers.verbalize_final import VerbalizeFinalFst
 from tqdm import tqdm
 
+<<<<<<< HEAD
 from nemo.collections import asr as nemo_asr
 from nemo.collections.asr.metrics.wer import word_error_rate
 
@@ -79,6 +83,61 @@ class Normalizer:
             text: string that may include semiotic classes
             verbose: whether to print intermediate meta information
 
+=======
+try:
+    import pynini
+
+    PYNINI_AVAILABLE = True
+except (ModuleNotFoundError, ImportError):
+    PYNINI_AVAILABLE = False
+
+
+class Normalizer:
+    """
+    Normalizer class that converts text from written to spoken form. 
+    Useful for TTS preprocessing. 
+
+    Args:
+        input_case: expected input capitalization
+    """
+
+    def __init__(self, input_case: str):
+        assert input_case in ["lower_cased", "cased"]
+
+        self.tagger = ClassifyFst(input_case=input_case)
+        self.verbalizer = VerbalizeFinalFst()
+        self.parser = TokenParser()
+
+    def normalize_list(self, texts: List[str], verbose=False) -> List[str]:
+        """
+        NeMo text normalizer 
+
+        Args:
+            texts: list of input strings
+            verbose: whether to print intermediate meta information
+
+        Returns converted list input strings
+        """
+        res = []
+        for input in tqdm(texts):
+            try:
+                text = self.normalize(input, verbose=verbose)
+            except:
+                print(input)
+                raise Exception
+            res.append(text)
+        return res
+
+    def normalize(self, text: str, verbose: bool) -> str:
+        """
+        Main function. Normalizes tokens from written to spoken form
+            e.g. 12 kg -> twelve kilograms
+
+        Args:
+            text: string that may include semiotic classes
+            verbose: whether to print intermediate meta information
+
+>>>>>>> main
         Returns: spoken form
         """
         text = text.strip()
@@ -103,6 +162,7 @@ class Normalizer:
             return output
         raise ValueError()
 
+<<<<<<< HEAD
     def normalize_with_audio(self, text: str, verbose: bool) -> str:
         """
         Main function. Normalizes tokens from written to spoken form
@@ -135,6 +195,8 @@ class Normalizer:
                 normalized_texts.append(self.select_verbalizer(verbalizer_lattice))
         return normalized_texts
 
+=======
+>>>>>>> main
     def _permute(self, d: OrderedDict) -> List[str]:
         """
         Creates reorderings of dictionary elements and serializes as strings
@@ -206,6 +268,7 @@ class Normalizer:
         lattice = text @ self.tagger.fst
         return lattice
 
+<<<<<<< HEAD
     def select_all_semiotic_tags(self, lattice: 'pynini.FstLike') -> List[str]:
         all_semiotic_tags = []
         all = lattice.paths("utf8")
@@ -217,6 +280,8 @@ class Normalizer:
                     all_semiotic_tags.append(item[1])
         return all_semiotic_tags
 
+=======
+>>>>>>> main
     def select_tag(self, lattice: 'pynini.FstLike') -> str:
         """
         Given tagged lattice return shortest path
@@ -276,6 +341,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     normalizer = Normalizer(input_case=args.input_case)
+
     audio = '/mnt/sdb/DATA/normalization/wavs_16000/lj_speech/LJ008-0149.wav'
     model = 'QuartzNet15x5Base-En'
 
