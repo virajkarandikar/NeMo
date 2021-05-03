@@ -246,14 +246,15 @@ class ClusteringDiarizer(Model, DiarizationMixin):
                 dic = json.loads(line)
                 uniq_names.append(dic['audio_filepath'].split('/')[-1].rsplit('.', 1)[0])
 
+
         for i, test_batch in enumerate(tqdm(self._speaker_model.test_dataloader())):
             test_batch = [x.to(self._device) for x in test_batch]
             audio_signal, audio_signal_len, labels, slices = test_batch
             with autocast():
                 _, embs = self._speaker_model.forward(input_signal=audio_signal, input_signal_length=audio_signal_len)
                 emb_shape = embs.shape[-1]
-                embs = embs.type(torch.float32)
-                embs = embs.view(-1, emb_shape).cpu().detach().numpy()
+                embs = embs.view(-1, emb_shape).type(torch.float32)
+                embs = embs.cpu().detach().numpy()
                 out_embeddings[uniq_names[i]].extend(embs)
             del test_batch
 
@@ -333,12 +334,12 @@ class ClusteringDiarizer(Model, DiarizationMixin):
             if not os.path.exists(self._speaker_manifest_path):
                 raise NotFoundError("Oracle VAD based manifest file not found")
 
-        self._extract_embeddings(self._speaker_manifest_path)
+        # self._extract_embeddings(self._speaker_manifest_path)
         out_rttm_dir = os.path.join(self._out_dir, 'pred_rttms')
         os.makedirs(out_rttm_dir, exist_ok=True)
-
+        # self._embeddings_file,
         perform_diarization(
-            embeddings_file=self._embeddings_file,
+            embeddings_file='/disk2/outputs/diarization/speaker_outputs/embeddings/oracle_amicorpus_lapel_test_manifest_embeddings.pkl',
             reco2num=self._num_speakers,
             manifest_path=self._speaker_manifest_path,
             sample_rate=self._cfg.sample_rate,

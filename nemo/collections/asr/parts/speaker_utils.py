@@ -252,7 +252,7 @@ def perform_clustering(embeddings, time_stamps, speakers, audio_rttm_map, out_rt
         if NUM_speakers >= 2:
             emb = embeddings[uniq_key]
             emb = np.asarray(emb)
-
+            # emb = emb - emb.mean(axis=0)
             cluster_labels = COSclustering(uniq_key, emb, oracle_num_speakers=NUM_speakers, max_num_speaker=8)
 
             lines = time_stamps[uniq_key]
