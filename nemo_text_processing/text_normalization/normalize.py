@@ -13,11 +13,11 @@
 # limitations under the License.
 
 import itertools
+import json
 import os
 from argparse import ArgumentParser
 from collections import OrderedDict
 from typing import List
-import json
 
 from nemo_text_processing.text_normalization.taggers.tokenize_and_classify import ClassifyFst
 from nemo_text_processing.text_normalization.token_parser import PRESERVE_ORDER_KEY, TokenParser
@@ -44,10 +44,10 @@ class Normalizer:
         input_case: expected input capitalization
     """
 
-    def __init__(self, input_case: str):
+    def __init__(self, input_case: str, deterministic: bool = True):
         assert input_case in ["lower_cased", "cased"]
 
-        self.tagger = ClassifyFst(input_case=input_case)
+        self.tagger = ClassifyFst(input_case=input_case, deterministic=deterministic)
         self.verbalizer = VerbalizeFinalFst()
         self.parser = TokenParser()
 
@@ -104,14 +104,15 @@ class Normalizer:
             return output
         raise ValueError()
 
-    def normalize_with_audio(self, text: str, verbose: bool) -> str:
+    def normalize_with_audio(self, text: str, transcript: str, verbose: bool) -> str:
         """
         Main function. Normalizes tokens from written to spoken form
             e.g. 12 kg -> twelve kilograms
         Args:
             text: string that may include semiotic classes
+            transcript: transcription of the audio
             verbose: whether to print intermediate meta information
-        Returns: spoken form
+        Returns: spoken form that matches the audio file best
         """
         text = text.strip()
         if not text:
@@ -131,8 +132,23 @@ class Normalizer:
                 verbalizer_lattice = self.find_verbalizer(tagged_text)
                 if verbalizer_lattice.num_states() == 0:
                     continue
-                normalized_texts.append(self.select_verbalizer(verbalizer_lattice))
-        return normalized_texts
+                verbalized = self.select_verbalizer(verbalizer_lattice)
+                normalized_texts.append(verbalized)
+
+        if len(normalized_texts) == 0:
+            raise ValueError()
+
+        for i in range(len(normalized_texts)):
+            normalized_texts[i] = normalized_texts[i].replace(' ,', ',').replace(' .', '.')
+        normalized_texts = set(normalized_texts)
+
+        normalized_options = []
+        for text in normalized_texts:
+            cer = round(word_error_rate([transcript], [text.lower()], use_cer=True) * 100, 2)
+            normalized_options.append((text, cer))
+
+        normalized_options = sorted(normalized_options, key=lambda x: x[1])
+        return normalized_options[0]
 
     def _permute(self, d: OrderedDict) -> List[str]:
         """
@@ -209,11 +225,8 @@ class Normalizer:
         all_semiotic_tags = []
         all = lattice.paths("utf8")
 
-        semiotic_classes = ['date', 'cardinal', 'ordinal', 'decimal', 'money', 'time', 'telephone', 'electronic']
         for item in all.items():
-            for semiotic in semiotic_classes:
-                if semiotic in item[1]:
-                    all_semiotic_tags.append(item[1])
+            all_semiotic_tags.append(item[1])
         return all_semiotic_tags
 
     def select_tag(self, lattice: 'pynini.FstLike') -> str:
@@ -254,19 +267,29 @@ class Normalizer:
         return output
 
 
+def _get_asr_model(asr_model):
+    if os.path.exists(args.model):
+        asr_model = nemo_asr.models.EncDecCTCModel.restore_from(asr_model)
+    elif args.model in nemo_asr.models.EncDecCTCModel.get_available_model_names():
+        asr_model = nemo_asr.models.EncDecCTCModel.from_pretrained(asr_model)
+    else:
+        raise ValueError(
+            f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
+        )
+    vocabulary = asr_model.cfg.decoder.vocabulary
+    return asr_model, vocabulary
+
+
 def parse_args():
     parser = ArgumentParser()
-    # parser.add_argument("input_string", help="input string", type=str)
     parser.add_argument(
-        "--input_string",
-        help="input string",
-        type=str,
-        default="and after a long interval his dead body was discovered, shockingly disfigured, in a ditch. This was in 1802.",
+        "--input", help="input text", type=str, default=None,
     )
     parser.add_argument(
         "--input_case", help="input capitalization", choices=["lower_cased", "cased"], default="cased", type=str
     )
     parser.add_argument("--verbose", help="print info for debugging", action='store_true')
+    parser.add_argument("--audio_data", help="path to audio file or .json manifest", default=None)
     parser.add_argument(
         '--model', type=str, default='QuartzNet15x5Base-En', help='Pre-trained model name or path to model checkpoint'
     )
@@ -275,49 +298,46 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
-    normalizer = Normalizer(input_case=args.input_case)
-    # print(normalizer.normalize(args.input_string, verbose=args.verbose))
-
-    if args.model is None:
-        print(f"No model provided, vocabulary won't be used")
-    elif os.path.exists(args.model):
-        asr_model = nemo_asr.models.EncDecCTCModel.restore_from(args.model)
-        vocabulary = asr_model.cfg.decoder.vocabulary
-    elif args.model in nemo_asr.models.EncDecCTCModel.get_available_model_names():
-        asr_model = nemo_asr.models.EncDecCTCModel.from_pretrained(args.model)
-        vocabulary = asr_model.cfg.decoder.vocabulary
+    if args.audio_data is None:
+        if args.input is None:
+            raise ValueError(f'input argument is not provided')
+        normalizer = Normalizer(input_case=args.input_case)
+        print(normalizer.normalize(args.input, verbose=args.verbose))
+    elif not os.path.exists(args.audio_data):
+        raise ValueError(f'{args.audio_data} not found.')
     else:
-        raise ValueError(
-            f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
-        )
+        normalizer = Normalizer(input_case=args.input_case, deterministic=False)
 
-    manifest = '/mnt/sdb/DATA/normalization/manifests/lj_speech_manifest.json'
+        if 'json' in args.audio_data:
+            manifest = args.audio_data
+            manifest_out = manifest.replace('.json', '_nemo_wfst.json')
+            with open(manifest, 'r') as f:
+                with open(manifest_out, 'w') as f_out:
+                    for line in f:
+                        line = json.loads(line)
+                        audio = line['audio_filepath']
+                        if 'transcript' in line:
+                            transcript = line['transcript']
+                        else:
+                            asr_model, _ = _get_asr_model(args.model)
+                            transcript = asr_model.transcribe([audio])[0]
+                        args.input = line['text']
+                        normalized_text, cer = normalizer.normalize_with_audio(
+                            args.input, transcript, verbose=args.verbose
+                        )
 
-    with open(manifest, 'r') as f:
-        for line in f:
-            line = json.loads(line)
-            audio = line['audio_filepath']
-            transcript = line['transcript']
-            args.input_string = line['text']
-
-            print(f'input     : {args.input_string}')
-            print(f'transcript: {transcript}')
-            print('=' * 20)
-            normalized_texts = normalizer.normalize_with_audio(args.input_string, verbose=args.verbose)
-
-            if len(normalized_texts) == 0:
-                raise ValueError()
-
-            for i in range(len(normalized_texts)):
-                normalized_texts[i] = normalized_texts[i].replace(' ,', ',').replace(' .', '.')
-            normalized_texts = set(normalized_texts)
-
-            print('gt:')
-            print(line['gt_normalized'])
-            print('normalized:')
-            for text in normalized_texts:
-                wer = round(word_error_rate([transcript], [text], use_cer=True) * 100, 2)
-                print(text, wer)
-
-            import pdb; pdb.set_trace()
-            print()
+                        if cer > line['CER_gt_normalized']:
+                            print(f'input     : {args.input}')
+                            print(f'transcript: {transcript}')
+                            print('gt  :', line['gt_normalized'], line['CER_gt_normalized'])
+                            print('wfst:', normalized_text, cer)
+                            print('=' * 40)
+                            line['nemo_wfst'] = normalized_text
+                            line['CER_nemo_wfst'] = cer
+                            f_out.write(json.dumps(line, ensure_ascii=False) + '\n')
+            print(f'Normalized version saved at {manifest_out}.')
+        else:
+            asr_model, _ = _get_asr_model(args.model)
+            transcript = asr_model.transcribe([args.audio_data])[0]
+            normalized_text, cer = normalizer.normalize_with_audio(args.input, transcript, verbose=args.verbose)
+            print(normalized_text)

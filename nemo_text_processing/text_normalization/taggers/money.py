@@ -21,6 +21,7 @@ from nemo_text_processing.text_normalization.graph_utils import (
     convert_space,
     insert_space,
 )
+from nemo_text_processing.text_normalization.taggers.date import _get_year_graph
 
 try:
     import pynini
@@ -42,7 +43,7 @@ class MoneyFst(GraphFst):
         decimal: DecimalFst
     """
 
-    def __init__(self, cardinal: GraphFst, decimal: GraphFst):
+    def __init__(self, cardinal: GraphFst, decimal: GraphFst, deterministic: bool = True):
         super().__init__(name="money", kind="classify")
         cardinal_graph = cardinal.graph
         graph_decimal_final = decimal.final_graph_wo_negative
@@ -54,12 +55,20 @@ class MoneyFst(GraphFst):
         graph_unit_singular = pynutil.insert("currency: \"") + unit_singular + pynutil.insert("\"")
         graph_unit_plural = pynutil.insert("currency: \"") + unit_plural + pynutil.insert("\"")
 
-        graph_integer = (
-            graph_unit_plural
-            + pynutil.insert(" integer_part: \"")
-            + ((NEMO_SIGMA - "1") @ cardinal_graph)
-            + pynutil.insert("\"")
-        )
+        if deterministic:
+            graph_integer = (
+                graph_unit_plural
+                + pynutil.insert(" integer_part: \"")
+                + ((NEMO_SIGMA - "1") @ cardinal_graph)
+                + pynutil.insert("\"")
+            )
+        else:
+            graph_integer = (
+                graph_unit_plural
+                + pynutil.insert(" integer_part: \"")
+                + ((NEMO_SIGMA - "1") @ (_get_year_graph() | cardinal_graph))
+                + pynutil.insert("\"")
+            )
         graph_integer |= (
             graph_unit_singular + pynutil.insert(" integer_part: \"") + pynini.cross("1", "one") + pynutil.insert("\"")
         )

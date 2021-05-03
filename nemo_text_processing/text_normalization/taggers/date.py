@@ -54,7 +54,7 @@ def _get_ties_graph():
         graph_teen
         | ties_graph + pynutil.delete("0")
         | ties_graph + insert_space + graph_digit
-        | pynini.cross("0", "o") + insert_space + graph_digit
+        | pynini.cross("0", "oh") + insert_space + graph_digit
     )
     return graph.optimize()
 

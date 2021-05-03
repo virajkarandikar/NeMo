@@ -44,9 +44,10 @@ class ClassifyFst(GraphFst):
     
     Args:
         input_case: accepting either "lower_cased" or "cased" input.
+        deterministic: if True will provide multiple transduction options in the taggers
     """
 
-    def __init__(self, input_case: str):
+    def __init__(self, input_case: str, deterministic: bool = True):
         super().__init__(name="tokenize_and_classify", kind="classify")
 
         cardinal = CardinalFst()
@@ -64,7 +65,7 @@ class ClassifyFst(GraphFst):
         time_graph = TimeFst(cardinal=cardinal).fst
         telephone_graph = TelephoneFst().fst
         electonic_graph = ElectronicFst().fst
-        money_graph = MoneyFst(cardinal=cardinal, decimal=decimal).fst
+        money_graph = MoneyFst(cardinal=cardinal, decimal=decimal, deterministic=deterministic).fst
         whitelist_graph = WhiteListFst(input_case=input_case).fst
         punct_graph = PunctuationFst().fst
 
