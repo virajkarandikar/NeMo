@@ -264,7 +264,7 @@ def parse_args():
         default="and after a long interval his dead body was discovered, shockingly disfigured, in a ditch. This was in 1802.",
     )
     parser.add_argument(
-        "--input_case", help="input capitalization", choices=["lower_cased", "cased"], default="lower_cased", type=str
+        "--input_case", help="input capitalization", choices=["lower_cased", "cased"], default="cased", type=str
     )
     parser.add_argument("--verbose", help="print info for debugging", action='store_true')
     parser.add_argument(
