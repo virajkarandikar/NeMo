@@ -21,8 +21,8 @@ import numpy as np
 from omegaconf import ListConfig
 from pyannote.core import Annotation, Segment
 from pyannote.metrics.diarization import DiarizationErrorRate
-from spectralcluster import SpectralClusterer
 
+from nemo.collections.asr.parts.nmse_clustering import COSclustering
 from nemo.utils import logging
 
 
@@ -253,8 +253,7 @@ def perform_clustering(embeddings, time_stamps, speakers, audio_rttm_map, out_rt
             emb = embeddings[uniq_key]
             emb = np.asarray(emb)
 
-            cluster_method = SpectralClusterer(min_clusters=2, max_clusters=NUM_speakers)
-            cluster_labels = cluster_method.predict(emb)
+            cluster_labels = COSclustering(uniq_key, emb, oracle_num_speakers=NUM_speakers, max_num_speaker=8)
 
             lines = time_stamps[uniq_key]
             assert len(cluster_labels) == len(lines)
