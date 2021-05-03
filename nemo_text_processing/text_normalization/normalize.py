@@ -17,6 +17,7 @@ import os
 from argparse import ArgumentParser
 from collections import OrderedDict
 from typing import List
+import json
 
 from nemo_text_processing.text_normalization.taggers.tokenize_and_classify import ClassifyFst
 from nemo_text_processing.text_normalization.token_parser import PRESERVE_ORDER_KEY, TokenParser
@@ -277,9 +278,6 @@ if __name__ == "__main__":
     normalizer = Normalizer(input_case=args.input_case)
     # print(normalizer.normalize(args.input_string, verbose=args.verbose))
 
-    audio = '/mnt/sdb/DATA/normalization/wavs_16000/lj_speech/LJ008-0149.wav'
-    model = 'QuartzNet15x5Base-En'
-
     if args.model is None:
         print(f"No model provided, vocabulary won't be used")
     elif os.path.exists(args.model):
@@ -292,22 +290,34 @@ if __name__ == "__main__":
         raise ValueError(
             f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
         )
-    transcript = asr_model.transcribe([audio])[0]
 
-    print(f'input     : {args.input_string}')
-    print(f'transcript: {transcript}')
-    print('=' * 20)
+    manifest = '/mnt/sdb/DATA/normalization/manifests/lj_speech_manifest.json'
 
-    normalized_texts = normalizer.normalize_with_audio(args.input_string, verbose=args.verbose)
+    with open(manifest, 'r') as f:
+        for line in f:
+            line = json.loads(line)
+            audio = line['audio_filepath']
+            transcript = line['transcript']
+            args.input_string = line['text']
 
-    if len(normalized_texts) == 0:
-        raise ValueError()
+            print(f'input     : {args.input_string}')
+            print(f'transcript: {transcript}')
+            print('=' * 20)
+            normalized_texts = normalizer.normalize_with_audio(args.input_string, verbose=args.verbose)
 
-    for i in range(len(normalized_texts)):
-        normalized_texts[i] = normalized_texts[i].replace(' ,', ',').replace(' .', '.')
-    normalized_texts = set(normalized_texts)
+            if len(normalized_texts) == 0:
+                raise ValueError()
 
-    print('normalized:')
-    for text in normalized_texts:
-        wer = round(word_error_rate([transcript], [text], use_cer=True) * 100, 2)
-        print(text, wer)
+            for i in range(len(normalized_texts)):
+                normalized_texts[i] = normalized_texts[i].replace(' ,', ',').replace(' .', '.')
+            normalized_texts = set(normalized_texts)
+
+            print('gt:')
+            print(line['gt_normalized'])
+            print('normalized:')
+            for text in normalized_texts:
+                wer = round(word_error_rate([transcript], [text], use_cer=True) * 100, 2)
+                print(text, wer)
+
+            import pdb; pdb.set_trace()
+            print()
