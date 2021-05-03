@@ -136,7 +136,7 @@ class Normalizer:
                 if verbose:
                     print(tagged_text)
                 verbalized = self.select_verbalizer(verbalizer_lattice)
-                normalized_texts.append(verbalized.strip())
+                normalized_texts.append(verbalized)
 
         if len(normalized_texts) == 0:
             raise ValueError()
