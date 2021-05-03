@@ -132,8 +132,11 @@ class Normalizer:
                 verbalizer_lattice = self.find_verbalizer(tagged_text)
                 if verbalizer_lattice.num_states() == 0:
                     continue
+
+                if verbose:
+                    print(tagged_text)
                 verbalized = self.select_verbalizer(verbalizer_lattice)
-                normalized_texts.append(verbalized)
+                normalized_texts.append(verbalized.strip())
 
         if len(normalized_texts) == 0:
             raise ValueError()
@@ -148,6 +151,9 @@ class Normalizer:
             normalized_options.append((text, cer))
 
         normalized_options = sorted(normalized_options, key=lambda x: x[1])
+        if verbose:
+            for option in normalized_options:
+                print(option)
         return normalized_options[0]
 
     def _permute(self, d: OrderedDict) -> List[str]:
@@ -227,6 +233,7 @@ class Normalizer:
 
         for item in all.items():
             all_semiotic_tags.append(item[1])
+            print(item[1])
         return all_semiotic_tags
 
     def select_tag(self, lattice: 'pynini.FstLike') -> str:

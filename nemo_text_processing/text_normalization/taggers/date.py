@@ -43,7 +43,7 @@ except (ModuleNotFoundError, ImportError):
     PYNINI_AVAILABLE = True
 
 
-def _get_ties_graph():
+def get_ties_graph():
     """
     Returns two digit transducer, e.g. 
     03 -> o three
@@ -59,14 +59,12 @@ def _get_ties_graph():
     return graph.optimize()
 
 
-def _get_year_graph():
+def get_hundreds_graph():
     """
-    Transducer for year, only from 1000 - 2999 e.g.
     1290 -> twelve nineteen
-    2000 - 2009 will be verbalized as two thousand.
+    3900 -> thirty nine hundred
     """
-
-    graph_ties = _get_ties_graph()
+    graph_ties = get_ties_graph()
     graph = (
         graph_ties + insert_space + graph_ties
         | graph_teen + insert_space + pynini.cross("00", "hundred")
@@ -80,6 +78,16 @@ def _get_year_graph():
             weight=-0.001,
         )
     )
+    return graph
+
+
+def _get_year_graph():
+    """
+    Transducer for year, only from 1000 - 2999 e.g.
+    1290 -> twelve nineteen
+    2000 - 2009 will be verbalized as two thousand.
+    """
+    graph = get_hundreds_graph()
     graph = (pynini.union("1", "2") + NEMO_DIGIT + NEMO_DIGIT + NEMO_DIGIT + pynini.closure("s", 0, 1)) @ graph
     return graph
 
