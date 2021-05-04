@@ -38,13 +38,13 @@ class MeasureFst(GraphFst):
     def __init__(self, decimal: GraphFst, cardinal: GraphFst):
         super().__init__(name="measure", kind="verbalize")
         optional_sign = pynini.closure(pynini.cross("negative: \"true\"", "minus ") + delete_space, 0, 1)
+        default_unit = pynutil.insert(" ") + pynini.closure(NEMO_CHAR - " ", 1) + pynutil.delete("\"") + delete_space
+
         unit = (
             pynutil.delete("units:")
             + delete_space
             + pynutil.delete("\"")
-            + pynini.closure(NEMO_CHAR - " ", 1)
-            + pynutil.delete("\"")
-            + delete_space
+            + (pynutil.add_weight(pynutil.delete("serial\" "), 1.09) | pynutil.add_weight(default_unit, 1.1))
         )
         graph_decimal = (
             pynutil.delete("decimal {")
@@ -61,9 +61,9 @@ class MeasureFst(GraphFst):
             + optional_sign
             + delete_space
             + cardinal.numbers
-            + pynini.closure(delete_space)
+            + delete_space
             + pynutil.delete("}")
         )
-        graph = (graph_cardinal | graph_decimal) + delete_space + pynutil.insert(" ") + unit
+        graph = (graph_cardinal | graph_decimal) + delete_space + unit
         delete_tokens = self.delete_tokens(graph)
         self.fst = delete_tokens.optimize()

@@ -21,6 +21,8 @@ from nemo_text_processing.text_normalization.graph_utils import (
     GraphFst,
     convert_space,
     delete_space,
+    delete_extra_space,
+    NEMO_ALPHA
 )
 
 try:
@@ -48,7 +50,7 @@ class MeasureFst(GraphFst):
         super().__init__(name="measure", kind="classify")
         cardinal_graph = cardinal.graph
 
-        graph_unit = pynini.closure(pynini.cross('-', ' ')) + pynini.string_file(get_abs_path("data/measurements.tsv"))
+        graph_unit = pynini.string_file(get_abs_path("data/measurements.tsv"))
         graph_unit_plural = convert_space(graph_unit @ SINGULAR_TO_PLURAL)
         graph_unit = convert_space(graph_unit)
         optional_graph_negative = pynini.closure(pynutil.insert("negative: ") + pynini.cross("-", "\"true\" "), 0, 1)
@@ -66,21 +68,19 @@ class MeasureFst(GraphFst):
         )
 
         unit_singular = (
-            pynutil.insert("units: \"")
-            + (graph_unit + optional_graph_unit2 | graph_unit2 | pynini.invert(graph_unit))
-            + pynutil.insert("\"")
+            pynutil.insert("units: \"") + (graph_unit + optional_graph_unit2 | graph_unit2) + pynutil.insert("\"")
         )
 
         subgraph_decimal = (
             pynutil.insert("decimal { ")
             + optional_graph_negative
             + decimal.final_graph_wo_negative
-            + pynini.closure(delete_space)
+            + delete_space
             + pynutil.insert(" } ")
-            + (unit_plural | unit_singular)
+            + unit_plural
         )
 
-        subgraph_cardinal = (
+        subgraph_cardinal = pynutil.add_weight(
             pynutil.insert("cardinal { ")
             + optional_graph_negative
             + pynutil.insert("integer: \"")
@@ -88,10 +88,10 @@ class MeasureFst(GraphFst):
             + delete_space
             + pynutil.insert("\"")
             + pynutil.insert(" } ")
-            + unit_plural
+            + unit_plural, 1.09
         )
 
-        subgraph_cardinal |= (
+        subgraph_cardinal |= pynutil.add_weight(
             pynutil.insert("cardinal { ")
             + optional_graph_negative
             + pynutil.insert("integer: \"")
@@ -99,20 +99,33 @@ class MeasureFst(GraphFst):
             + delete_space
             + pynutil.insert("\"")
             + pynutil.insert(" } ")
-            + unit_singular
+            + unit_singular, 1.09
         )
-
-        subgraph_cardinal |= (
-            pynutil.insert("cardinal { ")
-            + optional_graph_negative
-            + pynutil.insert("integer: \"")
-            + cardinal_graph
-            + pynini.closure(delete_space)
-            + pynutil.insert("\"")
-            + pynutil.insert(" } ")
-            + unit_singular
-        )
-
         final_graph = subgraph_decimal | subgraph_cardinal
+
+        optional_alpha = pynini.closure(pynutil.insert(" ") + NEMO_ALPHA)
+        optional_serial_end = pynini.cross('-', '') + NEMO_ALPHA + pynutil.insert(" ") \
+                              | NEMO_ALPHA + pynini.closure(pynutil.insert(" ") + NEMO_ALPHA)
+        optional_serial_start = NEMO_ALPHA + pynini.cross('-', ' ') | optional_alpha
+
+        # (ALPHA)DIGITS(-ALPHA)(ALPHA)
+        # final_graph |= optional_serial_start + (cardinal_graph | decimal.final_graph_wo_negative) + optional_serial_end
+
+        serial_graph = pynini.closure(cardinal.single_digits_graph
+                                      + optional_serial_end
+                                      + pynini.closure(pynutil.insert(" ") + cardinal.single_digits_graph), 1)
+
+        # serial_graph = serial_graph @ delete_extra_space
+        subgraph_cardinal = pynutil.add_weight(subgraph_cardinal, 1.09)
+        subgraph_cardinal |= pynutil.add_weight(
+                pynutil.insert("cardinal { ")
+                + optional_graph_negative
+                + pynutil.insert("integer: \"")
+                + serial_graph
+                + delete_space
+                + pynutil.insert("\" } units: \"serial\""), 1.1
+        )
+
+        final_graph = subgraph_decimal | subgraph_cardinal #(cardinal_graph | decimal.final_graph_wo_negative) + optional_serial_end
         final_graph = self.add_tokens(final_graph)
         self.fst = final_graph.optimize()

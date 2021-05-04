@@ -310,7 +310,7 @@ if __name__ == "__main__":
         if args.input is None:
             raise ValueError(f'input argument is not provided')
         normalizer = Normalizer(input_case=args.input_case)
-        print(normalizer.normalize(args.input, verbose=args.verbose))
+        print(f'|{normalizer.normalize(args.input, verbose=args.verbose)}|')
     elif not os.path.exists(args.audio_data):
         raise ValueError(f'{args.audio_data} not found.')
     else:

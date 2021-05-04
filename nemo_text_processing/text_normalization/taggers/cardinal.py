@@ -162,15 +162,15 @@ class CardinalFst(GraphFst):
 
         graph = pynini.invert(graph)
 
+        self.single_digits_graph = pynini.closure(
+            pynini.invert(graph_digit | graph_zero) + pynutil.insert(" "), 1
+        ).optimize()
         if not deterministic:
             optional_alpha = pynini.closure(NEMO_ALPHA + pynutil.insert(" "))
             optional_serial_end = pynini.closure(pynini.cross('-', ' ') + NEMO_ALPHA) | optional_alpha
             optional_serial_start = pynini.closure(NEMO_ALPHA + pynini.cross('-', ' ')) | optional_alpha
 
-            single_digits_graph = pynini.closure(
-                pynini.invert(graph_digit | graph_zero) + pynutil.insert(" "), 1
-            ).optimize()
-            graph = graph | single_digits_graph | get_hundreds_graph()
+            graph = graph | self.single_digits_graph | get_hundreds_graph()
 
             # (ALPHA)DIGITS(-ALPHA)(ALPHA)
             graph = optional_serial_start + graph + optional_serial_end
