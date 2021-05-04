@@ -163,12 +163,17 @@ class CardinalFst(GraphFst):
         graph = pynini.invert(graph)
 
         if not deterministic:
-            optional_serial = pynini.closure(pynini.cross('-', ' ') + NEMO_ALPHA) | pynini.closure(NEMO_ALPHA + pynutil.insert(" "))
+            optional_alpha = pynini.closure(NEMO_ALPHA + pynutil.insert(" "))
+            optional_serial_end = pynini.closure(pynini.cross('-', ' ') + NEMO_ALPHA) | optional_alpha
+            optional_serial_start = pynini.closure(NEMO_ALPHA + pynini.cross('-', ' ')) | optional_alpha
+
             single_digits_graph = pynini.closure(
                 pynini.invert(graph_digit | graph_zero) + pynutil.insert(" "), 1
             ).optimize()
             graph = graph | single_digits_graph | get_hundreds_graph()
-            graph = (optional_serial + graph + optional_serial)
+
+            # (ALPHA)DIGITS(-ALPHA)(ALPHA)
+            graph = optional_serial_start + graph + optional_serial_end
 
         self.graph = (graph @ delete_extra_spaces).optimize()
         optional_minus_graph = pynini.closure(pynutil.insert("negative: ") + pynini.cross("-", "\"true\" "), 0, 1)

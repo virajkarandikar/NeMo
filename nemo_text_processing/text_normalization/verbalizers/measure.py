@@ -52,7 +52,7 @@ class MeasureFst(GraphFst):
             + optional_sign
             + delete_space
             + decimal.numbers
-            + delete_space
+            + pynini.closure(delete_space)
             + pynutil.delete("}")
         )
         graph_cardinal = (
@@ -61,7 +61,7 @@ class MeasureFst(GraphFst):
             + optional_sign
             + delete_space
             + cardinal.numbers
-            + delete_space
+            + pynini.closure(delete_space)
             + pynutil.delete("}")
         )
         graph = (graph_cardinal | graph_decimal) + delete_space + pynutil.insert(" ") + unit

@@ -141,8 +141,10 @@ class Normalizer:
         if len(normalized_texts) == 0:
             raise ValueError()
 
+        punctuation = '!,.:;?'
         for i in range(len(normalized_texts)):
-            normalized_texts[i] = normalized_texts[i].replace(' ,', ',').replace(' .', '.')
+            for punct in punctuation:
+                normalized_texts[i] = normalized_texts[i].replace(f' {punct}', punct)
         normalized_texts = set(normalized_texts)
 
         normalized_options = []
@@ -337,6 +339,7 @@ if __name__ == "__main__":
                             print(f'transcript: {transcript}')
                             print('gt  :', line['gt_normalized'], line['CER_gt_normalized'])
                             print('wfst:', normalized_text, cer)
+                            print('audio:', line['audio_filepath'])
                             print('=' * 40)
                             line['nemo_wfst'] = normalized_text
                             line['CER_nemo_wfst'] = cer
