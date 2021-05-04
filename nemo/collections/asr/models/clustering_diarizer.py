@@ -246,7 +246,6 @@ class ClusteringDiarizer(Model, DiarizationMixin):
                 dic = json.loads(line)
                 uniq_names.append(dic['audio_filepath'].split('/')[-1].rsplit('.', 1)[0])
 
-
         for i, test_batch in enumerate(tqdm(self._speaker_model.test_dataloader())):
             test_batch = [x.to(self._device) for x in test_batch]
             audio_signal, audio_signal_len, labels, slices = test_batch
