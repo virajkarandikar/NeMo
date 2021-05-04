@@ -15,14 +15,7 @@
 
 
 from nemo_text_processing.text_normalization.data_loader_utils import get_abs_path
-from nemo_text_processing.text_normalization.graph_utils import (
-    NEMO_ALPHA,
-    NEMO_DIGIT,
-    NEMO_SIGMA,
-    GraphFst,
-    delete_extra_space,
-    insert_space,
-)
+from nemo_text_processing.text_normalization.graph_utils import NEMO_ALPHA, NEMO_DIGIT, GraphFst, delete_extra_space
 from nemo_text_processing.text_normalization.taggers.date import get_hundreds_graph
 
 try:
@@ -38,6 +31,10 @@ class CardinalFst(GraphFst):
     """
     Finite state transducer for classifying cardinals, e.g. 
         -23 -> cardinal { negative: "true"  integer: "twenty three" } }
+
+    Args:
+        deterministic: if True will provide a single transduction option,
+            for False multiple options (used for audio-based normalization)
     """
 
     def __init__(self, deterministic: bool = True):

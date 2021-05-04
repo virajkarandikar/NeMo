@@ -48,7 +48,7 @@ class Normalizer:
         assert input_case in ["lower_cased", "cased"]
 
         self.tagger = ClassifyFst(input_case=input_case, deterministic=deterministic)
-        self.verbalizer = VerbalizeFinalFst()
+        self.verbalizer = VerbalizeFinalFst(deterministic=deterministic)
         self.parser = TokenParser()
 
     def normalize_list(self, texts: List[str], verbose=False) -> List[str]:
@@ -233,7 +233,6 @@ class Normalizer:
 
         for item in all.items():
             all_semiotic_tags.append(item[1])
-            print(item[1])
         return all_semiotic_tags
 
     def select_tag(self, lattice: 'pynini.FstLike') -> str:

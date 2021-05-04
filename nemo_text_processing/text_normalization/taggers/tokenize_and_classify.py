@@ -44,7 +44,8 @@ class ClassifyFst(GraphFst):
     
     Args:
         input_case: accepting either "lower_cased" or "cased" input.
-        deterministic: if True will provide multiple transduction options in the taggers
+        deterministic: if True will provide a single transduction option,
+            for False multiple options (used for audio-based normalization)
     """
 
     def __init__(self, input_case: str, deterministic: bool = True):

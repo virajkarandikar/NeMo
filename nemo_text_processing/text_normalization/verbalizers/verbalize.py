@@ -31,13 +31,17 @@ class VerbalizeFst(GraphFst):
     Composes other verbalizer grammars.
     For deployment, this grammar will be compiled and exported to OpenFst Finate State Archiv (FAR) File. 
     More details to deployment at NeMo/tools/text_processing_deployment.
+
+    Args:
+        deterministic: if True will provide a single transduction option,
+            for False multiple options (used for audio-based normalization)
     """
 
-    def __init__(self):
+    def __init__(self, deterministic: bool = True):
         super().__init__(name="verbalize", kind="verbalize")
         decimal = DecimalFst()
         decimal_graph = decimal.fst
-        cardinal = CardinalFst()
+        cardinal = CardinalFst(deterministic=deterministic)
         cardinal_graph = cardinal.fst
         ordinal = OrdinalFst()
         ordinal_graph = ordinal.fst
