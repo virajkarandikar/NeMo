@@ -33,10 +33,15 @@ from sox import Transformer
 from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='LibriSpeech Data download')
-parser.add_argument("--data_root", required=True, default=None, type=str)
+parser.add_argument("--data_root", default=None, type=str)
+parser.add_argument("--data_out_dir", default=None, type=str)
+parser.add_argument("--json_out", default=None, type=str)
 parser.add_argument("--data_sets", default="dev_clean", type=str)
+parser.add_argument("--extracted_dir", default=None, type=str)
 parser.add_argument("--num_workers", default=4, type=int)
 args = parser.parse_args()
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger('sox').setLevel(logging.WARN)
 
 URLS = {
     'TRAIN_CLEAN_100': ("http://www.openslr.org/resources/12/train-clean-100.tar.gz"),
@@ -70,6 +75,7 @@ def __maybe_download_file(destination: str, source: str):
 
 
 def __extract_file(filepath: str, data_dir: str):
+    logging.info("Extracting to {0}".format(data_dir))
     try:
         tar = tarfile.open(filepath)
         tar.extractall(data_dir)
@@ -77,8 +83,17 @@ def __extract_file(filepath: str, data_dir: str):
     except Exception:
         logging.info('Not extracting. Maybe already there?')
 
+def __read_speaker_info(data_folder: str):
+    speaker_info = {}
+    with open(os.path.join(data_folder, "SPEAKERS.TXT"), encoding="utf-8") as fin:
+        for line in fin:
+            if line[0] != ';':
+                fields = line.strip().replace(' ', '').split(sep='|')
+                info = { 'gender': "male" if fields[1] == 'M' else "female" if fields[1] == 'F' else ""  }
+                speaker_info[fields[0]] = info
+    return speaker_info
 
-def __process_transcript(file_path: str, dst_folder: str):
+def __process_transcript(file_path: str, dst_folder: str, speaker_info: dict):
     """
     Converts flac files to wav from a given transcript, capturing the metadata.
     Args:
@@ -106,6 +121,7 @@ def __process_transcript(file_path: str, dst_folder: str):
             entry['audio_filepath'] = os.path.abspath(wav_file)
             entry['duration'] = float(duration)
             entry['text'] = transcript_text
+            entry['gender'] = speaker_info[id.split(sep='-')[0]]['gender']
             entries.append(entry)
     return entries
 
@@ -127,12 +143,14 @@ def __process_data(data_folder: str, dst_folder: str, manifest_file: str, num_wo
     files = []
     entries = []
 
+    speaker_info = __read_speaker_info(data_folder)
+
     for root, dirnames, filenames in os.walk(data_folder):
         for filename in fnmatch.filter(filenames, '*.trans.txt'):
             files.append(os.path.join(root, filename))
 
     with multiprocessing.Pool(num_workers) as p:
-        processing_func = functools.partial(__process_transcript, dst_folder=dst_folder)
+        processing_func = functools.partial(__process_transcript, dst_folder=dst_folder, speaker_info=speaker_info)
         results = p.imap(processing_func, files)
         for result in tqdm(results, total=len(files)):
             entries.extend(result)
@@ -143,6 +161,10 @@ def __process_data(data_folder: str, dst_folder: str, manifest_file: str, num_wo
 
 
 def main():
+    if args.extracted_dir == None and args.data_root == None:
+        parser.print_help()
+        exit()
+
     data_root = args.data_root
     data_sets = args.data_sets
     num_workers = args.num_workers
@@ -150,13 +172,28 @@ def main():
     if data_sets == "ALL":
         data_sets = "dev_clean,dev_other,train_clean_100,train_clean_360,train_other_500,test_clean,test_other"
 
+    if args.extracted_dir != None:
+        if args.data_out_dir == None:
+            logging.info("Must specify data_out_dir when using extracted_dir")
+            parser.print_help()
+            exit()
+
+        logging.info("Processing files at {0}".format(args.extracted_dir))
+        __process_data(
+            os.path.join(args.extracted_dir, "LibriSpeech"),
+            os.path.join(args.data_out_dir, "LibriSpeech"),
+            os.path.join(args.data_out_dir, args.json_out),
+            num_workers=num_workers,
+        )
+        exit()
+
     for data_set in data_sets.split(','):
         logging.info("\n\nWorking on: {0}".format(data_set))
         filepath = os.path.join(data_root, data_set + ".tar.gz")
         logging.info("Getting {0}".format(data_set))
         __maybe_download_file(filepath, data_set.upper())
         logging.info("Extracting {0}".format(data_set))
-        __extract_file(filepath, data_root)
+        __extract_file(filepath, temp_dir)
         logging.info("Processing {0}".format(data_set))
         __process_data(
             os.path.join(os.path.join(data_root, "LibriSpeech"), data_set.replace("_", "-"),),

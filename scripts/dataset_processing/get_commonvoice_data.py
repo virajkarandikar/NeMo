@@ -49,7 +49,10 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='Downloads and processes Mozilla Common Voice dataset.')
 parser.add_argument("--data_root", default='CommonVoice_dataset/', type=str, help="Directory to store the dataset.")
+parser.add_argument("--data_temp", default=None, type=str, help="Directory to store intermediate the dataset.")
+parser.add_argument("--data_out", default=None, type=str, help="Directory to store the final dataset.")
 parser.add_argument('--manifest_dir', default='./', type=str, help='Output directory for manifests')
+parser.add_argument("--save_meta", default=False, type=bool, help='Flag to save metadata in manifests')
 parser.add_argument("--num_workers", default=multiprocessing.cpu_count(), type=int, help="Workers to process dataset.")
 parser.add_argument('--sample_rate', default=16000, type=int, help='Sample rate')
 parser.add_argument('--n_channels', default=1, type=int, help='Number of channels for output wav files')
@@ -78,17 +81,32 @@ COMMON_VOICE_URL = (
     f"https://voice-prod-bundler-ee1969a6ce8178826482b88e843c335139bd3fb4.s3.amazonaws.com/"
     "{}/{}.tar.gz".format(args.version, args.language)
 )
+logging.getLogger().setLevel(logging.INFO)
+logging.getLogger('sox').setLevel(logging.WARN)
 
 
-def create_manifest(data: List[tuple], output_name: str, manifest_path: str):
+def create_manifest(data: List[tuple], output_name: str, manifest_path: str, data_type: str, save_meta: bool):
     output_file = Path(manifest_path) / output_name
     output_file.parent.mkdir(exist_ok=True, parents=True)
 
     with output_file.open(mode='w') as f:
-        for wav_path, duration, text in tqdm(data, total=len(data)):
-            f.write(
-                json.dumps({'audio_filepath': os.path.abspath(wav_path), "duration": duration, 'text': text}) + '\n'
-            )
+        for row in tqdm(data, total=len(data)):
+            if save_meta:
+                f.write(
+                    json.dumps({'audio_filepath': row['path'],
+                                "duration": row['duration'],
+                                'text': row['sentence'],
+                                "age": row['age'],
+                                "gender": row['gender'],
+                                "accent": row['accent'],
+                                "data_type": data_type}) + '\n'
+                )
+            else:
+                f.write(
+                    json.dumps({'audio_filepath': row['path'],
+                                "duration": row['duration'],
+                                'text': row['sentence']}) + '\n'
+                )
 
 
 def process_files(csv_file, data_root, num_workers):
@@ -103,8 +121,9 @@ def process_files(csv_file, data_root, num_workers):
     os.makedirs(wav_dir, exist_ok=True)
     audio_clips_path = os.path.dirname(csv_file) + '/clips/'
 
-    def process(x):
-        file_path, text = x
+    def process(row):
+        file_path = row['path']
+        text = row['sentence']
         file_name = os.path.splitext(os.path.basename(file_path))[0]
         text = text.lower().strip()
         audio_path = os.path.join(audio_clips_path, file_path)
@@ -114,14 +133,17 @@ def process_files(csv_file, data_root, num_workers):
         tfm.rate(samplerate=args.sample_rate)
         tfm.channels(n_channels=args.n_channels)
         tfm.build(input_filepath=audio_path, output_filepath=output_wav_path)
-        duration = sox.file_info.duration(output_wav_path)
-        return output_wav_path, duration, text
+        row['duration'] = sox.file_info.duration(output_wav_path)
+        row['sample_rate'] = sox.file_info.sample_rate(output_wav_path)
+        row['path'] = output_wav_path
+        row['sentence'] = text
+        return row
 
     logging.info('Converting mp3 to wav for {}.'.format(csv_file))
     with open(csv_file) as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
         next(reader, None)  # skip the headers
-        data = [(row['path'], row['sentence']) for row in reader]
+        data = [row for row in reader]
         with ThreadPool(num_workers) as pool:
             data = list(tqdm(pool.imap(process, data), total=len(data)))
     return data
@@ -129,28 +151,45 @@ def process_files(csv_file, data_root, num_workers):
 
 def main():
     data_root = args.data_root
+    data_out = data_root
+    data_temp = data_root
     os.makedirs(data_root, exist_ok=True)
 
-    target_unpacked_dir = os.path.join(data_root, "CV_unpacked")
+    if args.data_out != None and os.path.exists(args.data_out) == False:
+        logging.error('Invalid out dir {}'.format(args.data_out))
+        exit(1)
+    else:
+        data_out = args.data_out
+
+    if args.data_temp != None and os.path.exists(args.data_temp) == False:
+        logging.error('Invalid temp dir {}'.format(args.data_temp))
+        exit(1)
+    else:
+        data_temp = args.data_temp
+
+    target_unpacked_dir = os.path.join(data_temp, "CV_unpacked")
 
     if os.path.exists(target_unpacked_dir):
         logging.info('Find existing folder {}'.format(target_unpacked_dir))
     else:
-        logging.info("Could not find Common Voice, Downloading corpus...")
-
-        commands = [
-            'wget',
-            '--user-agent',
-            '"Mozilla/5.0 (Windows NT 10.0; WOW64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"',
-            '-P',
-            data_root,
-            f'{COMMON_VOICE_URL}',
-        ]
-        commands = " ".join(commands)
-        subprocess.run(commands, shell=True, stderr=sys.stderr, stdout=sys.stdout, capture_output=False)
         filename = f"{args.language}.tar.gz"
         target_file = os.path.join(data_root, os.path.basename(filename))
+        if not os.path.exists(target_file):
+            logging.info("Could not find Common Voice, Downloading corpus...")
+
+            commands = [
+                'wget',
+                '--user-agent',
+                '"Mozilla/5.0 (Windows NT 10.0; WOW64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36"',
+                '-P',
+                data_root,
+                f'{COMMON_VOICE_URL}',
+            ]
+            commands = " ".join(commands)
+            subprocess.run(commands, shell=True, stderr=sys.stderr, stdout=sys.stdout, capture_output=False)
+        else:
+            logging.info("Found Common Voice Corpus file at {}".format(target_file))
 
         os.makedirs(target_unpacked_dir, exist_ok=True)
         logging.info("Unpacking corpus to {} ...".format(target_unpacked_dir))
@@ -163,7 +202,7 @@ def main():
     for csv_file in args.files_to_process:
         data = process_files(
             csv_file=os.path.join(folder_path, csv_file),
-            data_root=os.path.join(data_root, os.path.splitext(csv_file)[0]),
+            data_root=os.path.join(data_out, os.path.splitext(csv_file)[0]),
             num_workers=args.num_workers,
         )
         logging.info('Creating manifests...')
@@ -171,6 +210,8 @@ def main():
             data=data,
             output_name=f'commonvoice_{os.path.splitext(csv_file)[0]}_manifest.json',
             manifest_path=args.manifest_dir,
+            data_type=os.path.splitext(csv_file)[0],
+            save_meta=args.save_meta
         )
 
 
