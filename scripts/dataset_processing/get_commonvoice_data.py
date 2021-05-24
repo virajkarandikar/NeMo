@@ -53,6 +53,7 @@ parser.add_argument("--data_temp", default=None, type=str, help="Directory to st
 parser.add_argument("--data_out", default=None, type=str, help="Directory to store the final dataset.")
 parser.add_argument('--manifest_dir', default='./', type=str, help='Output directory for manifests')
 parser.add_argument("--save_meta", default=False, type=bool, help='Flag to save metadata in manifests')
+parser.add_argument("--save_relative_path", default=False, type=bool, help='Flag to save relative path in manifests')
 parser.add_argument("--num_workers", default=multiprocessing.cpu_count(), type=int, help="Workers to process dataset.")
 parser.add_argument('--sample_rate', default=16000, type=int, help='Sample rate')
 parser.add_argument('--n_channels', default=1, type=int, help='Number of channels for output wav files')
@@ -84,8 +85,7 @@ COMMON_VOICE_URL = (
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger('sox').setLevel(logging.WARN)
 
-
-def create_manifest(data: List[tuple], output_name: str, manifest_path: str, data_type: str, save_meta: bool):
+def create_manifest(data: List[tuple], output_name: str, manifest_path: str, data_type: str, save_meta: bool, save_relative_path: bool):
     output_file = Path(manifest_path) / output_name
     output_file.parent.mkdir(exist_ok=True, parents=True)
 
@@ -93,9 +93,11 @@ def create_manifest(data: List[tuple], output_name: str, manifest_path: str, dat
         for row in tqdm(data, total=len(data)):
             if save_meta:
                 f.write(
-                    json.dumps({'audio_filepath': row['path'],
+                    json.dumps({'audio_filepath': row['relative_path'] if save_relative_path else row['path'],
                                 "duration": row['duration'],
-                                'text': row['sentence'],
+                                "sampling_rate": row['sample_rate'],
+                                'text_verbatim': row['sentence'],
+                                'text_original': row['text_original'],
                                 "age": row['age'],
                                 "gender": row['gender'],
                                 "accent": row['accent'],
@@ -105,7 +107,7 @@ def create_manifest(data: List[tuple], output_name: str, manifest_path: str, dat
                 f.write(
                     json.dumps({'audio_filepath': row['path'],
                                 "duration": row['duration'],
-                                'text': row['sentence']}) + '\n'
+                                'text': row['text_original']}) + '\n'
                 )
 
 
@@ -117,7 +119,7 @@ def process_files(csv_file, data_root, num_workers):
         csv_file: str, path to *.csv file with data description, usually start from 'cv-'
         data_root: str, path to dir to save results; wav/ dir will be created
     """
-    wav_dir = os.path.join(data_root, 'wav/')
+    wav_dir = os.path.join(data_root, os.path.splitext(os.path.basename(csv_file))[0], 'wav/')
     os.makedirs(wav_dir, exist_ok=True)
     audio_clips_path = os.path.dirname(csv_file) + '/clips/'
 
@@ -136,10 +138,11 @@ def process_files(csv_file, data_root, num_workers):
         row['duration'] = sox.file_info.duration(output_wav_path)
         row['sample_rate'] = sox.file_info.sample_rate(output_wav_path)
         row['path'] = output_wav_path
-        row['sentence'] = text
+        row['relative_path'] = output_wav_path.replace(data_root, "")
+        row['text_original'] = text
         return row
 
-    logging.info('Converting mp3 to wav for {}.'.format(csv_file))
+    logging.info('Converting mp3 to wav using {} workers for {}.'.format(num_workers, csv_file))
     with open(csv_file) as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
         next(reader, None)  # skip the headers
@@ -198,11 +201,12 @@ def main():
         tar.close()
 
     folder_path = os.path.join(target_unpacked_dir, args.version + f'/{args.language}/')
+    logging.info(subprocess.check_output("find {} -maxdepth 3".format(target_unpacked_dir), shell=True))
 
     for csv_file in args.files_to_process:
         data = process_files(
             csv_file=os.path.join(folder_path, csv_file),
-            data_root=os.path.join(data_out, os.path.splitext(csv_file)[0]),
+            data_root=data_out,
             num_workers=args.num_workers,
         )
         logging.info('Creating manifests...')
@@ -211,7 +215,8 @@ def main():
             output_name=f'commonvoice_{os.path.splitext(csv_file)[0]}_manifest.json',
             manifest_path=args.manifest_dir,
             data_type=os.path.splitext(csv_file)[0],
-            save_meta=args.save_meta
+            save_meta=args.save_meta,
+            save_relative_path=args.save_relative_path
         )
 
 
