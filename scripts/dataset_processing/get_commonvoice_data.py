@@ -111,18 +111,33 @@ def create_manifest(data: List[tuple], output_name: str, manifest_path: str, dat
                 )
 
 
-def process_files(csv_file, data_root, num_workers):
+def process_files(csv_file, data_out, num_workers):
     """ Read *.csv file description, convert mp3 to wav, process text.
-        Save results to data_root.
+        Save results to data_out.
 
     Args:
         csv_file: str, path to *.csv file with data description, usually start from 'cv-'
-        data_root: str, path to dir to save results; wav/ dir will be created
+        data_out: str, path to dir to save results; wav/ dir will be created
     """
-    wav_dir = os.path.join(data_root, os.path.splitext(os.path.basename(csv_file))[0], 'wav/')
+    wav_dir = os.path.join(data_out, 'wav/')
     os.makedirs(wav_dir, exist_ok=True)
     audio_clips_path = os.path.dirname(csv_file) + '/clips/'
 
+    logging.info('Converting mp3 to wav using {} workers for {}.'.format(num_workers, csv_file))
+    try:
+        # Get list of files to convert and prepare sox command
+        file_list = os.path.join(data_out, 'list.txt')
+        subprocess.check_call("cat {} | tail -n +2 | cut -f 2 > {}".format(csv_file, file_list), shell=True)
+        sox_command = "sox {0}/{{}} ".format(audio_clips_path) + wav_dir + "/{/.}.wav" + " rate {} channels {}".format(args.sample_rate, args.n_channels)
+        # Do the conversion using parallel
+        subprocess.check_call("cat {} | parallel -j {} --bar {}".format(file_list, num_workers, sox_command), shell=True)
+        file_list = os.path.join(data_out, 'list.txt')
+
+    except subprocess.CalledProcessError as err:
+        logging.error("Error {} returned by command {}. Output: {}".format(err.returncode, err.cmd, err.output))
+        return
+
+    logging.info('Reading metadata using {} workers for {}'.format(num_workers, csv_file))
     def process(row):
         file_path = row['path']
         text = row['sentence']
@@ -131,18 +146,16 @@ def process_files(csv_file, data_root, num_workers):
         audio_path = os.path.join(audio_clips_path, file_path)
         output_wav_path = os.path.join(wav_dir, file_name + '.wav')
 
-        tfm = Transformer()
-        tfm.rate(samplerate=args.sample_rate)
-        tfm.channels(n_channels=args.n_channels)
-        tfm.build(input_filepath=audio_path, output_filepath=output_wav_path)
+        #tfm = Transformer()
+        #tfm.rate(samplerate=args.sample_rate)
+        #tfm.channels(n_channels=args.n_channels)
+        #tfm.build(input_filepath=audio_path, output_filepath=output_wav_path)
         row['duration'] = sox.file_info.duration(output_wav_path)
         row['sample_rate'] = sox.file_info.sample_rate(output_wav_path)
         row['path'] = output_wav_path
-        row['relative_path'] = output_wav_path.replace(data_root, "")
-        row['text_original'] = text
+        row['sentence'] = text
         return row
 
-    logging.info('Converting mp3 to wav using {} workers for {}.'.format(num_workers, csv_file))
     with open(csv_file) as csvfile:
         reader = csv.DictReader(csvfile, delimiter='\t')
         next(reader, None)  # skip the headers
@@ -206,7 +219,7 @@ def main():
     for csv_file in args.files_to_process:
         data = process_files(
             csv_file=os.path.join(folder_path, csv_file),
-            data_root=data_out,
+            data_out=os.path.join(data_out, os.path.splitext(csv_file)[0]),
             num_workers=args.num_workers,
         )
         logging.info('Creating manifests...')
@@ -215,8 +228,7 @@ def main():
             output_name=f'commonvoice_{os.path.splitext(csv_file)[0]}_manifest.json',
             manifest_path=args.manifest_dir,
             data_type=os.path.splitext(csv_file)[0],
-            save_meta=args.save_meta,
-            save_relative_path=args.save_relative_path
+            save_meta=args.save_meta
         )
 
 
