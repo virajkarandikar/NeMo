@@ -107,7 +107,7 @@ def create_manifest(data: List[tuple], output_name: str, manifest_path: str, dat
                 f.write(
                     json.dumps({'audio_filepath': row['path'],
                                 "duration": row['duration'],
-                                'text': row['text_original']}) + '\n'
+                                'text': row['text_original'].lower()}) + '\n'
                 )
 
 
@@ -142,7 +142,7 @@ def process_files(csv_file, data_out, num_workers):
         file_path = row['path']
         text = row['sentence']
         file_name = os.path.splitext(os.path.basename(file_path))[0]
-        text = text.lower().strip()
+        text = text.strip()
         audio_path = os.path.join(audio_clips_path, file_path)
         output_wav_path = os.path.join(wav_dir, file_name + '.wav')
 
@@ -153,7 +153,7 @@ def process_files(csv_file, data_out, num_workers):
         row['duration'] = sox.file_info.duration(output_wav_path)
         row['sample_rate'] = sox.file_info.sample_rate(output_wav_path)
         row['path'] = output_wav_path
-        row['sentence'] = text
+        row['text_original'] = text
         return row
 
     with open(csv_file) as csvfile:
