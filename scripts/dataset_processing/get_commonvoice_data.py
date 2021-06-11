@@ -96,6 +96,7 @@ def create_manifest(data: List[tuple], output_name: str, manifest_path: str, dat
                     json.dumps({'audio_filepath': row['relative_path'] if save_relative_path else row['path'],
                                 "duration": row['duration'],
                                 "sampling_rate": row['sample_rate'],
+                                'original_sampling_rate': row['original_sampling_rate'],
                                 'text_verbatim': row['sentence'],
                                 'text_original': row['text_original'],
                                 "age": row['age'],
@@ -107,7 +108,7 @@ def create_manifest(data: List[tuple], output_name: str, manifest_path: str, dat
                 f.write(
                     json.dumps({'audio_filepath': row['path'],
                                 "duration": row['duration'],
-                                'text': row['text_original'].lower()}) + '\n'
+                                'text': row['text_original']}) + '\n'
                 )
 
 
@@ -122,37 +123,60 @@ def process_files(csv_file, data_out, num_workers):
     wav_dir = os.path.join(data_out, 'wav/')
     os.makedirs(wav_dir, exist_ok=True)
     audio_clips_path = os.path.dirname(csv_file) + '/clips/'
+    duration_file_path = os.path.join(data_out, 'duration_info.txt')
+    original_sr_file_path = os.path.join(data_out, 'original_sr_info.txt')
+    logs_parallel_util = os.path.join(args.data_temp, 'parallel_utility_logs.txt')
 
     logging.info('Converting mp3 to wav using {} workers for {}.'.format(num_workers, csv_file))
     try:
         # Get list of files to convert and prepare sox command
         file_list = os.path.join(data_out, 'list.txt')
         subprocess.check_call("cat {} | tail -n +2 | cut -f 2 > {}".format(csv_file, file_list), shell=True)
-        sox_command = "sox {0}/{{}} ".format(audio_clips_path) + wav_dir + "/{/.}.wav" + " rate {} channels {}".format(args.sample_rate, args.n_channels)
+        sox_command = "'echo file:{{}}; sox -v 1 {0}/{{}} ".format(audio_clips_path) + wav_dir + "/{/.}.wav" + " rate {0} channels {1} stat 2>&1 |& tee -a {2}; echo -------------------- >> {2}'".format(args.sample_rate, args.n_channels, logs_parallel_util)
         # Do the conversion using parallel
-        subprocess.check_call("cat {} | parallel -j {} --bar {}".format(file_list, num_workers, sox_command), shell=True)
+        subprocess.check_call("cat {} | parallel -j {} --bar {} | grep -e file -e Length > {}".format(file_list, num_workers, sox_command, duration_file_path), shell=True)
+        
+        # Get Original Sampling Rate
+        logging.info('Finding original sample rate using {} workers for {}.'.format(num_workers, csv_file))
+        soxi_command = "'echo file:{{}}; soxi {0}/{{}} |& tee -a {1}; echo -------------------- >> {1}'".format(audio_clips_path, logs_parallel_util)
+        subprocess.check_call("cat {} | parallel -j {} --bar {} | grep -e file -e 'Sample Rate' > {}".format(file_list, num_workers, soxi_command, original_sr_file_path), shell=True)
         file_list = os.path.join(data_out, 'list.txt')
 
     except subprocess.CalledProcessError as err:
         logging.error("Error {} returned by command {}. Output: {}".format(err.returncode, err.cmd, err.output))
         return
 
+    def parse_file_as_dict(duration_file):
+        with open(duration_file) as f:
+            file_dict = {}
+            while True:
+                line1 = f.readline()
+                line2 = f.readline()
+                if not line2:
+                    break
+                file_dict[line1.split(':')[1].strip()] = line2.split(':')[1].strip()
+        return file_dict
+
+
+    durations = parse_file_as_dict(duration_file_path)
+    original_sampling_rates = parse_file_as_dict(original_sr_file_path)
     logging.info('Reading metadata using {} workers for {}'.format(num_workers, csv_file))
+
     def process(row):
         file_path = row['path']
         text = row['sentence']
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
-        text = text.strip()
-        audio_path = os.path.join(audio_clips_path, file_path)
+        base_name = os.path.basename(file_path)
+        file_name = os.path.splitext(base_name)[0]
+        text = text.lower().strip()
         output_wav_path = os.path.join(wav_dir, file_name + '.wav')
 
-        #tfm = Transformer()
-        #tfm.rate(samplerate=args.sample_rate)
-        #tfm.channels(n_channels=args.n_channels)
-        #tfm.build(input_filepath=audio_path, output_filepath=output_wav_path)
-        row['duration'] = sox.file_info.duration(output_wav_path)
-        row['sample_rate'] = sox.file_info.sample_rate(output_wav_path)
+        row['duration'] = float(durations[base_name])
+        row['sample_rate'] = args.sample_rate
+        row['original_sampling_rate'] = float(original_sampling_rates[base_name])
         row['path'] = output_wav_path
+        row['gender'] = row['gender']
+        row['age'] = row['age']
+        row['accent'] = row['accent']
         row['text_original'] = text
         return row
 
@@ -228,7 +252,8 @@ def main():
             output_name=f'commonvoice_{os.path.splitext(csv_file)[0]}_manifest.json',
             manifest_path=args.manifest_dir,
             data_type=os.path.splitext(csv_file)[0],
-            save_meta=args.save_meta
+            save_meta=args.save_meta,
+	    save_relative_path=False
         )
 
 
