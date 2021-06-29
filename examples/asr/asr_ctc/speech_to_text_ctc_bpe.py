@@ -72,12 +72,24 @@ from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
 
+# Maglev uses MPIRUN for multi node. MPIRUN spawns child processes.
+# But LightningEnvironment.creates_children returns False which conflicts with MPIRUN.
+# Define subclass to customize this behavior
+from pytorch_lightning.plugins.environments import LightningEnvironment
+class MaglevEnvironment(LightningEnvironment):
+    def creates_children(self) -> bool:
+        logging.info(f"MaglevEnvironment: creates_children returning True")
+        return True
 
 @hydra_runner(config_path="../conf/citrinet/", config_name="config_bpe")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
-    trainer = pl.Trainer(**cfg.trainer)
+    if int(cfg.trainer.num_nodes) > 1:
+        trainer = pl.Trainer(**cfg.trainer, plugins=[MaglevEnvironment()])
+    else:
+        trainer = pl.Trainer(**cfg.trainer)
+
     exp_manager(trainer, cfg.get("exp_manager", None))
     asr_model = EncDecCTCModelBPE(cfg=cfg.model, trainer=trainer)
 
