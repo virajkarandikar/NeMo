@@ -159,7 +159,7 @@ class ModelPT(LightningModule, Model):
 
     def register_artifact(self, config_path: str, src: str, verify_src_exists: bool = True):
         """ Register model artifacts with this function. These artifacts (files) will be included inside .nemo file
-            when model.save_to("mymodel.nemo") is called.        
+            when model.save_to("mymodel.nemo") is called.
 
             How it works:
             1. It always returns existing absolute path which can be used during Model constructor call
@@ -177,7 +177,7 @@ class ModelPT(LightningModule, Model):
             Args:
                 config_path (str): Artifact key. Usually corresponds to the model config.
                 src (str): Path to artifact.
-                verify_src_exists (bool): If set to False, then the artifact is optional and register_artifact will return None even if 
+                verify_src_exists (bool): If set to False, then the artifact is optional and register_artifact will return None even if
                                           src is not found. Defaults to True.
 
             Returns:
@@ -255,7 +255,11 @@ class ModelPT(LightningModule, Model):
                 # Note uuid.uuid4().hex is guaranteed to be 32 character long
                 artifact_base_name = os.path.basename(artiitem.path)
                 artifact_uniq_name = f"{uuid.uuid4().hex}_{artifact_base_name}"
-                shutil.copy2(artiitem.path, os.path.join(nemo_file_folder, artifact_uniq_name))
+                try:
+                    shutil.copy2(artiitem.path, os.path.join(nemo_file_folder, artifact_uniq_name))
+                except IOError as e:
+                    logging.info(f'Failed to copy {artiitem.path} using copy2. Trying copy.')
+                    shutil.copy(artiitem.path, os.path.join(nemo_file_folder, artifact_uniq_name))
 
                 # Update artifacts registry
                 new_artiitem = model_utils.ArtifactItem()
