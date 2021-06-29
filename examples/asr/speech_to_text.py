@@ -64,11 +64,23 @@ Overide optimizer entirely
 
 """
 
+# Maglev uses MPIRUN for multi node. MPIRUN spawns child processes.
+# But LightningEnvironment.creates_children returns False which conflicts with MPIRUN.
+# Define subclass to customize this behavior
+from pytorch_lightning.plugins.environments import LightningEnvironment
+class MaglevEnvironment(LightningEnvironment):
+    def creates_children(self) -> bool:
+        logging.info(f"MaglevEnvironment: creates_children returning True")
+        return True
 
 @hydra_runner(config_path="conf", config_name="config")
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
-    trainer = pl.Trainer(**cfg.trainer)
+    if int(cfg.trainer.num_nodes) > 1:
+        trainer = pl.Trainer(**cfg.trainer, plugins=[MaglevEnvironment()])
+    else:
+        trainer = pl.Trainer(**cfg.trainer)
+
     exp_manager(trainer, cfg.get("exp_manager", None))
     asr_model = EncDecCTCModel(cfg=cfg.model, trainer=trainer)
 
