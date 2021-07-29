@@ -82,6 +82,7 @@ def parse_args():
     )
     parser.add_argument('--vocab', help='optional vocabulary to highlight OOV words')
     parser.add_argument('--port', default='8050', help='serving port for establishing connection')
+    parser.add_argument('--base_url', default='/', help='base url pathname')
     parser.add_argument(
         '--disable-caching-metrics', action='store_true', help='disable caching metrics for errors analysis'
     )
@@ -203,14 +204,16 @@ def load_data(data_filename, disable_caching=False, estimate_audio=False, vocab=
                         match_vocab[orig[word_idx]] += 1
                 wmr_count += measures['hits']
 
+            word_rate = round(num_words / item['duration'], 2) if item['duration'] > 0 else 0.0
+            char_rate = round(num_chars / item['duration'], 2) if item['duration'] > 0 else 0.0
             data.append(
                 {
                     'audio_filepath': item['audio_filepath'],
                     'duration': round(item['duration'], 2),
                     'num_words': num_words,
                     'num_chars': num_chars,
-                    'word_rate': round(num_words / item['duration'], 2),
-                    'char_rate': round(num_chars / item['duration'], 2),
+                    'word_rate': word_rate,
+                    'char_rate': char_rate,
                     'text': item['text'],
                 }
             )
@@ -323,7 +326,12 @@ app = dash.Dash(
     suppress_callback_exceptions=True,
     external_stylesheets=[dbc.themes.BOOTSTRAP],
     title=os.path.basename(args.manifest),
+    serve_locally=False,
+    requests_pathname_prefix=args.base_url,
 )
+
+root_path = args.base_url
+samples_url_path = os.path.join(root_path, 'samples')
 
 figures_labels = {
     'duration': ['Duration', 'Duration, sec'],
@@ -672,8 +680,8 @@ app.layout = html.Div(
         dcc.Location(id='url', refresh=False),
         dbc.NavbarSimple(
             children=[
-                dbc.NavItem(dbc.NavLink('Statistics', id='stats_link', href='/', active=True)),
-                dbc.NavItem(dbc.NavLink('Samples', id='samples_link', href='/samples')),
+                dbc.NavItem(dbc.NavLink('Statistics', id='stats_link', href=root_path, active=True)),
+                dbc.NavItem(dbc.NavLink('Samples', id='samples_link', href=samples_url_path)),
             ],
             brand='Speech Data Explorer',
             sticky='top',
@@ -690,7 +698,7 @@ app.layout = html.Div(
     [Input('url', 'pathname')],
 )
 def nav_click(url):
-    if url == '/samples':
+    if url == samples_url_path:
         return [samples_layout, False, True]
     else:
         return [stats_layout, True, False]
