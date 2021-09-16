@@ -32,6 +32,13 @@ except (ModuleNotFoundError, ImportError):
     ASR_AVAILABLE = False
 
 try:
+    from nemo.collections.common.tokenizers.moses_tokenizers import MosesProcessor
+
+    NLP_AVAILABLE = True
+except (ModuleNotFoundError, ImportError):
+    ASR_AVAILABLE = False
+
+try:
     import pynini
     from pynini.lib import rewrite
 
@@ -92,6 +99,10 @@ class NormalizerWithAudio(Normalizer):
             cache_dir=cache_dir,
             overwrite_cache=overwrite_cache,
         )
+        if NLP_AVAILABLE:
+            self.processor = MosesProcessor(lang_id=lang)
+        else:
+            print("NeMo NLP is not available. Moses de-tokenization will be skipped.")
 
     def normalize(
         self,
@@ -141,6 +152,8 @@ class NormalizerWithAudio(Normalizer):
             raise ValueError()
         if punct_post_process:
             normalized_texts = [post_process_punctuation(t) for t in normalized_texts]
+            if NLP_AVAILABLE:
+                normalized_texts = [self.processor.detokenize([t]) for t in normalized_texts]
         normalized_texts = set(normalized_texts)
         return normalized_texts
 

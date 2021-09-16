@@ -24,6 +24,7 @@ from omegaconf import DictConfig
 from pytorch_lightning import Trainer
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, DataCollatorForSeq2Seq
 
+from nemo.collections.common.tokenizers.moses_tokenizers import MosesProcessor
 from nemo.collections.nlp.data.text_normalization import TextNormalizationDecoderDataset, constants
 from nemo.collections.nlp.models.duplex_text_normalization.utils import get_formatted_string, is_url
 from nemo.collections.nlp.models.nlp_model import NLPModel
@@ -69,6 +70,8 @@ class DuplexDecoderModel(NLPModel):
         self.use_cg = cfg.get('use_cg', False) and self.lang == constants.ENGLISH
         if self.use_cg:
             self.setup_cgs(cfg)
+
+        self.processor = MosesProcessor(lang_id=self.lang)
 
     # Setup covering grammars (if enabled)
     def setup_cgs(self, cfg: DictConfig):
@@ -372,7 +375,6 @@ class DuplexDecoderModel(NLPModel):
                 cur_texts.append(generated_texts[span_ctx])
                 span_ctx += 1
             final_texts.append(cur_texts)
-
         return final_texts
 
     def postprocess_output_spans(self, input_centers: List[str], generated_spans: List[str], input_dirs: List[str]):
