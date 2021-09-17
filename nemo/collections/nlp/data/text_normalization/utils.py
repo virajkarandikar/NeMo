@@ -19,7 +19,108 @@ from tqdm import tqdm
 
 from nemo.collections.nlp.data.text_normalization import constants
 
-__all__ = ['read_data_file', 'normalize_str']
+__all__ = ['read_data_file', 'normalize_str', 'filter_out_input']
+
+# TODO this is part of the tar creation script
+from typing import List, Tuple
+import wordninja
+def _preprocess_file(input_file: str, lang: str) -> List[Tuple[List[str]]]:
+    """
+    Performs initial preprocessing, i.e., urls formatting, removal of "_trans" from Ru set
+    Args:
+        input_file: path to a file in google TN format
+        lang: data language
+    Returns:
+        Processed data. Each element is a Tuple(List[semiotic classes], List[written words], List[spoken words])
+    """
+    print(f"Reading and running initial pre-processing of {input_file}...")
+    cur_split = []
+    with open(input_file, 'r', encoding='utf-8') as f:
+        # Loop through each line of the file
+        cur_classes, cur_tokens, cur_outputs = [], [], []
+        for linectx, line in tqdm(enumerate(f)):
+            es = line.strip().split('\t')
+            if len(es) == 2 and es[0] == '<eos>':
+                # Update cur_split
+                cur_outputs = process_url(cur_tokens, cur_outputs, lang)
+                cur_split.append((cur_classes, cur_tokens, cur_outputs))
+                # Reset
+                cur_classes, cur_tokens, cur_outputs = [], [], []
+                continue
+            # Remove _trans (for Russian)
+            if lang == constants.RUSSIAN:
+                es[2] = es[2].replace('_trans', '')
+            # Update the current example
+            assert len(es) == 3
+            cur_classes.append(es[0])
+            cur_tokens.append(es[1])
+            cur_outputs.append(es[2])
+    return cur_split
+
+def flatten(l):
+    """ flatten a list of lists """
+    return [item for sublist in l for item in sublist]
+
+def process_url(tokens: List[str], outputs: List[str], lang: str):
+    """
+    The function is used to process the spoken form of every URL in an example.
+    E.g., "dot h_letter  _letter t_letter  _letter m_letter  _letter l_letter" ->
+          "dot h t m l"
+    Args:
+        tokens: The tokens of the written form
+        outputs: The expected outputs for the spoken form
+        lang: Selected language.
+    Return:
+        outputs: The outputs for the spoken form with preprocessed URLs.
+    """
+    if lang != constants.ENGLISH:
+        return outputs
+
+    for i in range(len(tokens)):
+        t, o = tokens[i], outputs[i]
+        if o != constants.SIL_WORD and '_letter' in o:
+            o_tokens = o.split(' ')
+            all_spans, cur_span = [], []
+            for j in range(len(o_tokens)):
+                if len(o_tokens[j]) == 0:
+                    continue
+                if o_tokens[j] == '_letter':
+                    all_spans.append(cur_span)
+                    all_spans.append([' '])
+                    cur_span = []
+                else:
+                    o_tokens[j] = o_tokens[j].replace('_letter', '')
+                    cur_span.append(o_tokens[j])
+            if len(cur_span) > 0:
+                all_spans.append(cur_span)
+            o_tokens = flatten(all_spans)
+
+            o = ''
+            for o_token in o_tokens:
+                if len(o_token) > 1:
+                    o += ' ' + o_token + ' '
+                else:
+                    o += o_token
+            o = o.strip()
+            o_tokens = wordninja.split(o)
+            o = ' '.join(o_tokens)
+
+            outputs[i] = o
+    return outputs
+############################################
+# remove above ^^
+def filter_out_input(fname: str):
+    # remove letters class (i.e. abbreviations),
+    insts = _preprocess_file(fname, 'en')
+    add = [x for x in insts if 'ADDRESS' in x[0]]
+    import pdb;
+    pdb.set_trace()
+    print()
+
+if __name__ == '__main__':
+    fname = "/mnt/sdb/DATA/normalization/google_data/DEL/small_00000.tsv"
+    filter_out_input(fname)
+
 
 
 def input_preprocessing(sent: str, lang: str):
