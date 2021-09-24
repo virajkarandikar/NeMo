@@ -76,8 +76,8 @@ class ClassifyFstSmall(GraphFst):
             # fraction_graph = fraction.fst
             #
             measure = taggers_small.MeasureFst(
-                cardinal=default_cardinal,
-                decimal=default_decimal,
+                small_cardinal=cardinal_small,
+                small_decimal=decimal_small,
                 fraction=taggers.FractionFst(default_cardinal),
                 deterministic=deterministic,
             )
@@ -89,11 +89,7 @@ class ClassifyFstSmall(GraphFst):
             # telephone_graph = TelephoneFst(deterministic=deterministic).fst
             electonic_graph = taggers.ElectronicFst(deterministic=deterministic).fst
             money_graph = taggers_small.MoneyFst(
-                default_cardinal=default_cardinal,
-                default_decimal=default_decimal,
-                small_cardinal=cardinal_small,
-                small_decimal=decimal_small,
-                deterministic=deterministic,
+                small_cardinal=cardinal_small, small_decimal=decimal_small, deterministic=deterministic,
             ).fst
             whitelist_graph = taggers_small.WhiteListFst(input_case=input_case, deterministic=deterministic).fst
             punct_graph = taggers.PunctuationFst(deterministic=deterministic).fst

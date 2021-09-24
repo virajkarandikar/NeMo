@@ -83,12 +83,7 @@ class MoneyFst(GraphFst):
     """
 
     def __init__(
-        self,
-        default_cardinal: GraphFst,
-        default_decimal: GraphFst,
-        small_cardinal: GraphFst,
-        small_decimal: GraphFst,
-        deterministic: bool = True,
+        self, small_cardinal: GraphFst, small_decimal: GraphFst, deterministic: bool = True,
     ):
         super().__init__(name="money", kind="classify", deterministic=deterministic)
 
@@ -121,7 +116,13 @@ class MoneyFst(GraphFst):
         )
 
         graph_integer |= singular_graph
+        self.filter = (
+            pynini.project(unit_singular_raw, "input")
+            + pynini.closure(pynini.accep(" "), 0, 1)
+            + (small_decimal.filter | small_cardinal.filter)
+        )
 
         final_graph = graph_integer | graph_decimal
+        final_graph = pynini.compose(self.filter, final_graph.optimize()).optimize()
         final_graph = self.add_tokens(final_graph)
         self.fst = final_graph.optimize()
