@@ -14,8 +14,7 @@
 # limitations under the License.
 
 from nemo_text_processing.text_normalization.en.graph_utils import NEMO_DIGIT, GraphFst
-from nemo_text_processing.text_normalization.en.taggers.decimal import DecimalFst as defaultDecimalFst
-from nemo_text_processing.text_normalization.en.utils import get_abs_path
+from pynini.lib.rewrite import top_rewrite
 
 try:
     import pynini
@@ -40,9 +39,16 @@ class DecimalFst(GraphFst):
     def __init__(self, cardinal: GraphFst, deterministic: bool):
         super().__init__(name="decimal", kind="classify", deterministic=deterministic)
 
-        default_decimal = defaultDecimalFst(cardinal=cardinal, deterministic=deterministic)
-        self.filter = pynini.union(
-            pynini.closure(NEMO_DIGIT) + pynini.accep(".") + NEMO_DIGIT ** (4, ...),
-            NEMO_DIGIT ** (5, ...) + pynini.accep(".") + pynini.closure(NEMO_DIGIT, 1),
-        )
-        self.fst = pynini.compose(self.filter, default_decimal.fst).optimize()
+        filter_integer_part = cardinal.filter + pynini.accep(".") + pynini.closure(NEMO_DIGIT, 1)
+        filter_fractional_part = pynini.closure(NEMO_DIGIT) + pynini.accep(".") + NEMO_DIGIT ** (4, ...)
+        self.filter = filter_integer_part | filter_fractional_part
+
+        graph = pynutil.insert("integer_part: \"") + cardinal.single_digits_graph + pynutil.insert("\"")
+        graph += pynini.cross(".", " ")
+        graph += pynutil.insert("fractional_part: \"") + cardinal.single_digits_graph + pynutil.insert("\"")
+
+        graph = pynini.compose(self.filter, graph)
+        final_graph = self.add_tokens(graph.optimize())
+        self.fst = final_graph.optimize()
+
+        assert top_rewrite("123.01891", graph) == 'integer_part: "one two three" fractional_part: "zero one eight nine one"'

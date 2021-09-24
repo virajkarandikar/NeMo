@@ -37,7 +37,7 @@ class CardinalFst(GraphFst):
             for False multiple transduction are generated (used for audio-based normalization)
     """
 
-    def __init__(self, deterministic: bool = True, large_to_digits=True):
+    def __init__(self, deterministic: bool = True):
         super().__init__(name="cardinal", kind="classify", deterministic=deterministic)
 
         graph = pynini.Far(get_abs_path("data/numbers/cardinal_number_name.far")).get_fst()
@@ -93,9 +93,8 @@ class CardinalFst(GraphFst):
 
         final_graph = self.graph | self.get_serial_graph()
 
-        if large_to_digits:
-            long_numbers = pynini.compose(NEMO_DIGIT ** (5, ...), self.single_digits_graph).optimize()
-            final_graph |= pynutil.add_weight(long_numbers, -0.001)
+        long_numbers = pynini.compose(NEMO_DIGIT ** (5, ...), self.single_digits_graph).optimize()
+        final_graph |= pynutil.add_weight(long_numbers, -0.001)
 
         if not deterministic:
             final_graph |= self.range_graph

@@ -14,8 +14,8 @@
 # limitations under the License.
 
 
-from nemo_text_processing.text_normalization.en.graph_utils import NEMO_DIGIT, GraphFst
-from nemo_text_processing.text_normalization.en.taggers.cardinal import CardinalFst as defaultCardinalFst
+from nemo_text_processing.text_normalization.en.graph_utils import NEMO_DIGIT, GraphFst, get_abs_path, insert_space
+from pynini.lib.rewrite import top_rewrite
 
 try:
     import pynini
@@ -39,9 +39,20 @@ class CardinalFst(GraphFst):
     def __init__(self, deterministic: bool = True):
         super().__init__(name="cardinal", kind="classify", deterministic=deterministic)
 
-        default_cardinals = defaultCardinalFst(large_to_digits=False)
+        graph_digit = pynini.string_file(get_abs_path("data/numbers/digit.tsv"))
+        graph_zero = pynini.string_file(get_abs_path("data/numbers/zero.tsv"))
+        single_digits_graph = pynini.invert(graph_digit | graph_zero)
+        self.single_digits_graph = single_digits_graph + pynini.closure(insert_space + single_digits_graph)
+        self.optional_minus = pynini.closure(pynini.accep("-"), 0, 1)
+        self.optional_minus_graph = pynini.closure(pynutil.insert("negative: ") + pynini.cross("-", "\"true\" "), 0, 1)
 
-        self.filter = pynini.union(
-            NEMO_DIGIT ** (5, ...), NEMO_DIGIT ** (2, 3) + pynini.closure(pynini.accep(",") + NEMO_DIGIT ** (3), 1)
+        self.filter = self.optional_minus + pynini.union(
+            NEMO_DIGIT ** (5, ...), NEMO_DIGIT ** (2, 3) + pynini.closure(pynini.cross(",", "") + NEMO_DIGIT ** (3), 1)
         )
-        self.fst = pynini.compose(self.filter, default_cardinals.fst).optimize()
+
+        graph = pynini.compose(self.filter, self.optional_minus + self.single_digits_graph)
+        final_graph = self.optional_minus_graph + pynutil.insert("integer: \"") + graph + pynutil.insert("\"")
+        final_graph = self.add_tokens(final_graph)
+        self.fst = final_graph.optimize()
+
+        assert top_rewrite("123,454", graph) == 'one two three four five four'
