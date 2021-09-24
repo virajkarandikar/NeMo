@@ -63,19 +63,25 @@ class ClassifyFstSmall(GraphFst):
         else:
             logging.info(f"Creating ClassifyFst grammars.")
             cardinal = taggers_small.CardinalFst(deterministic=deterministic)
+            default_cardinal = taggers.CardinalFst(deterministic=deterministic, large_to_digits=False)
             cardinal_graph = cardinal.fst
-            # import pdb; pdb.set_trace()
 
             # ordinal = taggers_small.OrdinalFst(cardinal=cardinal, deterministic=deterministic)
             # ordinal_graph = ordinal.fst
 
-            decimal = taggers_small.DecimalFst(cardinal=taggers.CardinalFst(), deterministic=deterministic)
+            decimal = taggers_small.DecimalFst(cardinal=default_cardinal, deterministic=deterministic)
+            default_decimal = taggers.DecimalFst(cardinal=default_cardinal, deterministic=deterministic)
             decimal_graph = decimal.fst
             # fraction = FractionFst(deterministic=deterministic, cardinal=cardinal)
             # fraction_graph = fraction.fst
             #
-            # measure = MeasureFst(cardinal=cardinal, decimal=decimal, fraction=fraction, deterministic=deterministic)
-            # measure_graph = measure.fst
+            measure = taggers_small.MeasureFst(
+                cardinal=default_cardinal,
+                decimal=default_decimal,
+                fraction=taggers.FractionFst(default_cardinal),
+                deterministic=deterministic,
+            )
+            measure_graph = measure.fst
             # date_graph = DateFst(cardinal=cardinal, deterministic=deterministic).fst
             # import pdb; pdb.set_trace()
             word_graph = taggers.WordFst(deterministic=deterministic).fst
@@ -83,7 +89,7 @@ class ClassifyFstSmall(GraphFst):
             # telephone_graph = TelephoneFst(deterministic=deterministic).fst
             electonic_graph = taggers.ElectronicFst(deterministic=deterministic).fst
             # money_graph = MoneyFst(cardinal=cardinal, decimal=decimal, deterministic=deterministic).fst
-            whitelist_graph = taggers.WhiteListFst(input_case=input_case, deterministic=deterministic).fst
+            whitelist_graph = taggers_small.WhiteListFst(input_case=input_case, deterministic=deterministic).fst
             punct_graph = taggers.PunctuationFst(deterministic=deterministic).fst
 
             classify = (
@@ -91,7 +97,7 @@ class ClassifyFstSmall(GraphFst):
                 # | pynutil.add_weight(time_graph, 1.1)
                 # | pynutil.add_weight(date_graph, 1.09)
                 | pynutil.add_weight(decimal_graph, 1.1)
-                # | pynutil.add_weight(measure_graph, 1.1)
+                | pynutil.add_weight(measure_graph, 1.1)
                 | pynutil.add_weight(cardinal_graph, 1.1)
                 # | pynutil.add_weight(ordinal_graph, 1.1)
                 # | pynutil.add_weight(money_graph, 1.1)

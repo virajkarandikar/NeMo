@@ -39,13 +39,9 @@ class CardinalFst(GraphFst):
     def __init__(self, deterministic: bool = True):
         super().__init__(name="cardinal", kind="classify", deterministic=deterministic)
 
-        default_cardinals = defaultCardinalFst()
+        default_cardinals = defaultCardinalFst(large_to_digits=False)
 
-        filter = NEMO_DIGIT ** (5, ...)
-        final_graph = pynini.compose(filter, default_cardinals.final_graph).optimize()
-
-        final_graph = (
-            default_cardinals.optional_minus_graph + pynutil.insert("integer: \"") + final_graph + pynutil.insert("\"")
+        filter = pynini.union(
+            NEMO_DIGIT ** (5, ...), NEMO_DIGIT ** (2, 3) + pynini.closure(pynini.accep(",") + NEMO_DIGIT ** (3), 1)
         )
-        final_graph = self.add_tokens(final_graph.optimize())
-        self.fst = final_graph.optimize()
+        self.fst = pynini.compose(filter, default_cardinals.fst).optimize()
