@@ -70,11 +70,10 @@ class ClassifyFstSmall(GraphFst):
             # ordinal_graph = ordinal.fst
 
             decimal_small = taggers_small.DecimalFst(cardinal=cardinal_small, deterministic=deterministic)
-            default_decimal = taggers.DecimalFst(cardinal=default_cardinal, deterministic=deterministic)
             decimal_graph = decimal_small.fst
-            # fraction = FractionFst(deterministic=deterministic, cardinal=cardinal)
-            # fraction_graph = fraction.fst
-            #
+            fraction = taggers_small.FractionFst(deterministic=deterministic, small_cardinal=cardinal_small)
+            fraction_graph = fraction.fst
+
             measure = taggers_small.MeasureFst(
                 small_cardinal=cardinal_small,
                 small_decimal=decimal_small,
@@ -83,7 +82,7 @@ class ClassifyFstSmall(GraphFst):
             )
             measure_graph = measure.fst
             # date_graph = DateFst(cardinal=cardinal, deterministic=deterministic).fst
-            # import pdb; pdb.set_trace()
+
             word_graph = taggers.WordFst(deterministic=deterministic).fst
             # time_graph = TimeFst(cardinal=cardinal, deterministic=deterministic).fst
             # telephone_graph = TelephoneFst(deterministic=deterministic).fst
@@ -96,16 +95,13 @@ class ClassifyFstSmall(GraphFst):
 
             classify = (
                 pynutil.add_weight(whitelist_graph, 1.01)
-                # | pynutil.add_weight(time_graph, 1.1)
-                # | pynutil.add_weight(date_graph, 1.09)
                 | pynutil.add_weight(decimal_graph, 1.1)
                 | pynutil.add_weight(measure_graph, 1.1)
                 | pynutil.add_weight(cardinal_graph, 1.1)
                 # | pynutil.add_weight(ordinal_graph, 1.1)
                 | pynutil.add_weight(money_graph, 1.1)
-                # | pynutil.add_weight(telephone_graph, 1.1)
                 | pynutil.add_weight(electonic_graph, 1.1)
-                # | pynutil.add_weight(fraction_graph, 1.1)
+                | pynutil.add_weight(fraction_graph, 1.1)
                 | pynutil.add_weight(word_graph, 100)
             )
 

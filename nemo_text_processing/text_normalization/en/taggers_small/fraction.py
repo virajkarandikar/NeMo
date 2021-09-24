@@ -35,10 +35,10 @@ class FractionFst(GraphFst):
             for False multiple transduction are generated (used for audio-based normalization)
     """
 
-    def __init__(self, cardinal, deterministic: bool = True):
+    def __init__(self, small_cardinal, deterministic: bool = True):
         super().__init__(name="fraction", kind="classify", deterministic=deterministic)
-        cardinal_graph = cardinal.graph
 
+        self.filter = small_cardinal.optional_minus + small_cardinal.filter + pynini.closure(pynini.accep(" "), 0, 1) + pynini.accep("/") + pynini.closure(pynini.accep(" "), 0, 1) + small_cardinal.filter
         integer = pynutil.insert("integer_part: \"") + cardinal_graph + pynutil.insert("\"") + pynini.accep(" ")
         numerator = (
             pynutil.insert("numerator: \"") + cardinal_graph + (pynini.cross("/", "\" ") | pynini.cross(" / ", "\" "))
