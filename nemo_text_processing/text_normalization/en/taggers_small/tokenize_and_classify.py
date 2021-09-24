@@ -69,9 +69,9 @@ class ClassifyFstSmall(GraphFst):
             # ordinal = taggers_small.OrdinalFst(cardinal=cardinal, deterministic=deterministic)
             # ordinal_graph = ordinal.fst
 
-            decimal = taggers_small.DecimalFst(cardinal=cardinal_small, deterministic=deterministic)
+            decimal_small = taggers_small.DecimalFst(cardinal=cardinal_small, deterministic=deterministic)
             default_decimal = taggers.DecimalFst(cardinal=default_cardinal, deterministic=deterministic)
-            decimal_graph = decimal.fst
+            decimal_graph = decimal_small.fst
             # fraction = FractionFst(deterministic=deterministic, cardinal=cardinal)
             # fraction_graph = fraction.fst
             #
@@ -88,13 +88,13 @@ class ClassifyFstSmall(GraphFst):
             # time_graph = TimeFst(cardinal=cardinal, deterministic=deterministic).fst
             # telephone_graph = TelephoneFst(deterministic=deterministic).fst
             electonic_graph = taggers.ElectronicFst(deterministic=deterministic).fst
-            # money_graph = taggers_small.MoneyFst(
-            #     default_cardinal=default_cardinal,
-            #     default_decimal=default_decimal,
-            #     small_cardinal=cardinal_small,
-            #     small_decimal=decimal,
-            #     deterministic=deterministic,
-            # ).fst
+            money_graph = taggers_small.MoneyFst(
+                default_cardinal=default_cardinal,
+                default_decimal=default_decimal,
+                small_cardinal=cardinal_small,
+                small_decimal=decimal_small,
+                deterministic=deterministic,
+            ).fst
             whitelist_graph = taggers_small.WhiteListFst(input_case=input_case, deterministic=deterministic).fst
             punct_graph = taggers.PunctuationFst(deterministic=deterministic).fst
 
@@ -106,7 +106,7 @@ class ClassifyFstSmall(GraphFst):
                 | pynutil.add_weight(measure_graph, 1.1)
                 | pynutil.add_weight(cardinal_graph, 1.1)
                 # | pynutil.add_weight(ordinal_graph, 1.1)
-                # | pynutil.add_weight(money_graph, 1.1)
+                | pynutil.add_weight(money_graph, 1.1)
                 # | pynutil.add_weight(telephone_graph, 1.1)
                 | pynutil.add_weight(electonic_graph, 1.1)
                 # | pynutil.add_weight(fraction_graph, 1.1)

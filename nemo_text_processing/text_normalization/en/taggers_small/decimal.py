@@ -43,12 +43,16 @@ class DecimalFst(GraphFst):
         filter_fractional_part = pynini.closure(NEMO_DIGIT) + pynini.accep(".") + NEMO_DIGIT ** (4, ...)
         self.filter = filter_integer_part | filter_fractional_part
 
-        graph = pynutil.insert("integer_part: \"") + cardinal.single_digits_graph + pynutil.insert("\"")
+        graph = pynini.closure(
+            pynutil.insert("integer_part: \"") + cardinal.single_digits_graph + pynutil.insert("\""), 0, 1
+        )
         graph += pynini.cross(".", " ")
         graph += pynutil.insert("fractional_part: \"") + cardinal.single_digits_graph + pynutil.insert("\"")
 
-        graph = pynini.compose(self.filter, graph)
-        final_graph = self.add_tokens(graph.optimize())
-        self.fst = final_graph.optimize()
+        self.final_graph = pynini.compose(self.filter, graph).optimize()
+        self.fst = self.add_tokens(self.final_graph.optimize())
 
-        assert top_rewrite("123.01891", graph) == 'integer_part: "one two three" fractional_part: "zero one eight nine one"'
+        assert (
+            top_rewrite("123.01891", self.final_graph)
+            == 'integer_part: "one two three" fractional_part: "zero one eight nine one"'
+        )
