@@ -65,7 +65,7 @@ class Normalizer:
             from nemo_text_processing.text_normalization.en.taggers_small.tokenize_and_classify import (
                 ClassifyFstSmall as ClassifyFst,
             )
-            from nemo_text_processing.text_normalization.en.verbalizers.verbalize_final import VerbalizeFinalFst
+            from nemo_text_processing.text_normalization.en.verbalizers_small.verbalize_final import VerbalizeFinalFst
         elif lang == 'en' and not deterministic:
             from nemo_text_processing.text_normalization.en.taggers.tokenize_and_classify_with_audio import ClassifyFst
             from nemo_text_processing.text_normalization.en.verbalizers.verbalize_final import VerbalizeFinalFst

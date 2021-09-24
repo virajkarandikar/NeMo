@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from nemo_text_processing.text_normalization.en.graph_utils import GraphFst
+from nemo_text_processing.text_normalization.en.graph_utils import NEMO_DIGIT, GraphFst
 
 try:
     import pynini
@@ -38,18 +38,46 @@ class FractionFst(GraphFst):
     def __init__(self, small_cardinal, deterministic: bool = True):
         super().__init__(name="fraction", kind="classify", deterministic=deterministic)
 
-        self.filter = small_cardinal.optional_minus + small_cardinal.filter + pynini.closure(pynini.accep(" "), 0, 1) + pynini.accep("/") + pynini.closure(pynini.accep(" "), 0, 1) + small_cardinal.filter
-        integer = pynutil.insert("integer_part: \"") + cardinal_graph + pynutil.insert("\"") + pynini.accep(" ")
-        numerator = (
-            pynutil.insert("numerator: \"") + cardinal_graph + (pynini.cross("/", "\" ") | pynini.cross(" / ", "\" "))
+        single_digits_graph = small_cardinal.single_digits_graph
+        at_least_one_digit = pynini.closure(NEMO_DIGIT, 1)
+        # large integer part
+        self.filter = (
+            small_cardinal.optional_minus
+            + small_cardinal.filter
+            + pynini.accep(" ")
+            + at_least_one_digit
+            + (pynini.accep("/") | pynini.accep(" / "))
+            + at_least_one_digit
         )
+        # large numerator
+        self.filter |= (
+            pynini.closure(at_least_one_digit + pynini.accep(" "), 0, 1)
+            + small_cardinal.filter
+            + (pynini.accep("/") | pynini.accep(" / "))
+            + at_least_one_digit
+        )
+        # large denominator
+        self.filter |= (
+            pynini.closure(at_least_one_digit + pynini.accep(" "), 0, 1)
+            + at_least_one_digit
+            + (pynini.accep("/") | pynini.accep(" / "))
+            + small_cardinal.filter
+        )
+        integer = pynutil.insert("integer_part: \"") + single_digits_graph + pynutil.insert("\"") + pynini.accep(" ")
+        numerator = (
+            pynutil.insert("numerator: \"")
+            + single_digits_graph
+            + (pynini.cross("/", " slash\" ") | pynini.cross(" / ", "slash\" "))
+        )
+        denominator = pynutil.insert("denominator: \"") + small_cardinal.single_digits_graph + pynutil.insert("\"")
 
-        endings = ["rd", "th", "st", "nd"]
-        endings += [x.upper() for x in endings]
-        optional_end = pynini.closure(pynini.cross(pynini.union(*endings), ""), 0, 1)
-
-        denominator = pynutil.insert("denominator: \"") + cardinal_graph + optional_end + pynutil.insert("\"")
-
-        self.graph = pynini.closure(integer, 0, 1) + numerator + denominator
-        final_graph = self.add_tokens(self.graph)
-        self.fst = final_graph.optimize()
+        graph = pynini.closure(integer, 0, 1) + numerator + denominator
+        graph = pynini.compose(self.filter, graph.optimize()).optimize()
+        graph = self.add_tokens(graph)
+        self.fst = graph.optimize()
+        # import pdb; pdb.set_trace()
+        # from pynini.lib.rewrite import top_rewrite
+        # print(top_rewrite("12345 1/51", self.fst))
+        # print(top_rewrite("1 22345/51", self.fst))
+        # print(top_rewrite("1 2/12352", self.fst))
+        # print()
