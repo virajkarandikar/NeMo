@@ -41,8 +41,8 @@ class DecimalFst(GraphFst):
         super().__init__(name="decimal", kind="classify", deterministic=deterministic)
 
         default_decimal = defaultDecimalFst(cardinal=cardinal, deterministic=deterministic)
-        filter = pynini.union(
+        self.filter = pynini.union(
             pynini.closure(NEMO_DIGIT) + pynini.accep(".") + NEMO_DIGIT ** (4, ...),
             NEMO_DIGIT ** (5, ...) + pynini.accep(".") + pynini.closure(NEMO_DIGIT, 1),
         )
-        self.fst = pynini.compose(filter, default_decimal.fst).optimize()
+        self.fst = pynini.compose(self.filter, default_decimal.fst).optimize()

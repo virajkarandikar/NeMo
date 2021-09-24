@@ -41,7 +41,7 @@ class CardinalFst(GraphFst):
 
         default_cardinals = defaultCardinalFst(large_to_digits=False)
 
-        filter = pynini.union(
+        self.filter = pynini.union(
             NEMO_DIGIT ** (5, ...), NEMO_DIGIT ** (2, 3) + pynini.closure(pynini.accep(",") + NEMO_DIGIT ** (3), 1)
         )
-        self.fst = pynini.compose(filter, default_cardinals.fst).optimize()
+        self.fst = pynini.compose(self.filter, default_cardinals.fst).optimize()
