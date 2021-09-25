@@ -50,9 +50,9 @@ class CardinalFst(GraphFst):
             NEMO_DIGIT ** (5, ...), NEMO_DIGIT ** (2, 3) + pynini.closure(pynini.cross(",", "") + NEMO_DIGIT ** (3), 1)
         )
 
-        graph = pynini.compose(self.filter, self.optional_minus + self.single_digits_graph)
-        final_graph = self.optional_minus_graph + pynutil.insert("integer: \"") + graph + pynutil.insert("\"")
+        self.graph = pynini.compose(self.filter, self.optional_minus + self.single_digits_graph)
+        final_graph = self.optional_minus_graph + pynutil.insert("integer: \"") + self.graph + pynutil.insert("\"")
         final_graph = self.add_tokens(final_graph)
         self.fst = final_graph.optimize()
 
-        assert top_rewrite("123,454", graph) == 'one two three four five four'
+        assert top_rewrite("123,454", self.graph) == 'one two three four five four'

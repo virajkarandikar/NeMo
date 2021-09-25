@@ -98,16 +98,9 @@ class MoneyFst(GraphFst):
         graph_unit_plural = pynutil.insert("currency: \"") + unit_plural + pynutil.insert("\"")
 
         space = insert_space | pynini.accep(" ")
-        singular_graph = (
-            graph_unit_singular
-            + space
-            + pynutil.insert("integer_part: \"")
-            + pynini.cross("1", "one")
-            + pynutil.insert("\"")
-        )
 
         graph_decimal = graph_unit_plural + space + small_decimal.final_graph
-        graph_integer = (
+        graph_integer_large = (
             graph_unit_plural
             + space
             + pynutil.insert("integer_part: \"")
@@ -115,14 +108,21 @@ class MoneyFst(GraphFst):
             + pynutil.insert("\"")
         )
 
-        graph_integer |= singular_graph
-        self.filter = (
-            pynini.project(unit_singular_raw, "input")
-            + pynini.closure(pynini.accep(" "), 0, 1)
-            + (small_decimal.filter | small_cardinal.filter)
-        )
+        currency = pynini.project(unit_singular_raw, "input") + pynini.closure(pynini.accep(" "), 0, 1)
+        graph_integer_large = pynini.compose(currency + small_cardinal.filter, graph_integer_large)
+        #
+        # self.filter = (
+        #     pynini.project(unit_singular_raw, "input")
+        #     + pynini.closure(pynini.accep(" "), 0, 1)
+        #     + (small_cardinal.filter + pynini.closure(pynini.accep(".") + NEMO_DIGIT**(4,...), 0, 1))
+        # )
 
-        final_graph = graph_integer | graph_decimal
-        final_graph = pynini.compose(self.filter, final_graph.optimize()).optimize()
+        final_graph = graph_integer_large | graph_decimal
+        # final_graph = pynini.compose(self.filter, final_graph.optimize()).optimize()
         final_graph = self.add_tokens(final_graph)
         self.fst = final_graph.optimize()
+
+        # from pynini.lib.rewrite import top_rewrite
+        # import pdb;
+        # pdb.set_trace()
+        # print()

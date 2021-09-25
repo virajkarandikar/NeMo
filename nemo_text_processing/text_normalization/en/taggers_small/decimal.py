@@ -39,20 +39,27 @@ class DecimalFst(GraphFst):
     def __init__(self, cardinal: GraphFst, deterministic: bool):
         super().__init__(name="decimal", kind="classify", deterministic=deterministic)
 
-        filter_integer_part = cardinal.filter + pynini.accep(".") + pynini.closure(NEMO_DIGIT, 1)
-        filter_fractional_part = pynini.closure(NEMO_DIGIT) + pynini.accep(".") + NEMO_DIGIT ** (4, ...)
-        self.filter = filter_integer_part | filter_fractional_part
-
-        graph = pynini.closure(
-            pynutil.insert("integer_part: \"") + cardinal.single_digits_graph + pynutil.insert("\""), 0, 1
+        large_integer_part = (
+            cardinal.optional_minus_graph + pynutil.insert("integer_part: \"") + cardinal.graph + pynutil.insert("\"")
         )
-        graph += pynini.cross(".", " ")
-        graph += pynutil.insert("fractional_part: \"") + cardinal.single_digits_graph + pynutil.insert("\"")
+        small_integer_part = (
+            pynutil.insert("integer_part: \"")
+            + pynini.closure(pynini.accep("-"), 0, 1)
+            + NEMO_DIGIT ** (0, 4)
+            + pynutil.insert("\"")
+        )
+        integer_part = pynutil.add_weight(large_integer_part, -100) | small_integer_part
 
-        self.final_graph = pynini.compose(self.filter, graph).optimize()
+        # large_fractional_part = pynini.cross(".", "") + pynutil.insert("fractional_part: \"") + pynini.compose(NEMO_DIGIT ** (4, ...), cardinal.single_digits_graph) + pynutil.insert("\"")
+        # small_fractional_part = pynini.cross(".", "") + pynutil.insert("fractional_part: \"") + pynini.closure(NEMO_DIGIT ** (0, 3)) + pynutil.insert("\"")
+        # fractional_part = pynutil.add_weight(large_fractional_part, -100) | small_fractional_part
+
+        fractional_part = (
+            pynini.cross(".", "")
+            + pynutil.insert("fractional_part: \"")
+            + cardinal.single_digits_graph
+            + pynutil.insert("\"")
+        )
+
+        self.final_graph = pynini.closure(integer_part + pynutil.insert(" "), 0, 1) + fractional_part
         self.fst = self.add_tokens(self.final_graph.optimize())
-
-        assert (
-            top_rewrite("123.01891", self.final_graph)
-            == 'integer_part: "one two three" fractional_part: "zero one eight nine one"'
-        )

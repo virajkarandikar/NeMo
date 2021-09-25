@@ -141,18 +141,16 @@ class MeasureFst(GraphFst):
         #     pynutil.insert("fraction { ") + fraction.graph + delete_space + pynutil.insert(" } ") + unit_plural
         # )
 
-        self.filter = (
-            (small_decimal.filter | small_cardinal.filter)
-            + pynini.closure(pynini.accep(" "), 0, 1)
-            + pynini.project(graph_unit_raw, "input")
+        filter_cardinal = (
+            small_cardinal.filter + pynini.closure(pynini.accep(" "), 0, 1) + pynini.project(graph_unit_raw, "input")
         )
 
         final_graph = (
             subgraph_decimal
-            | subgraph_cardinal
+            | pynini.compose(filter_cardinal, subgraph_cardinal)
             # | subgraph_fraction
         ).optimize()
 
-        final_graph = pynini.compose(self.filter, final_graph)
+        # final_graph = pynini.compose(self.filter, final_graph)
         final_graph = self.add_tokens(final_graph)
         self.fst = final_graph.optimize()

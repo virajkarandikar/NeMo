@@ -67,7 +67,7 @@ class FractionFst(GraphFst):
         numerator = (
             pynutil.insert("numerator: \"")
             + single_digits_graph
-            + (pynini.cross("/", " slash\" ") | pynini.cross(" / ", "slash\" "))
+            + (pynini.cross("/", " by\" ") | pynini.cross(" / ", "by\" "))
         )
         denominator = pynutil.insert("denominator: \"") + small_cardinal.single_digits_graph + pynutil.insert("\"")
 
@@ -75,9 +75,4 @@ class FractionFst(GraphFst):
         graph = pynini.compose(self.filter, graph.optimize()).optimize()
         graph = self.add_tokens(graph)
         self.fst = graph.optimize()
-        # import pdb; pdb.set_trace()
-        # from pynini.lib.rewrite import top_rewrite
-        # print(top_rewrite("12345 1/51", self.fst))
-        # print(top_rewrite("1 22345/51", self.fst))
-        # print(top_rewrite("1 2/12352", self.fst))
-        # print()
+
