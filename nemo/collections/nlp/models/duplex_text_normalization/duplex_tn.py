@@ -107,9 +107,13 @@ class DuplexTextNormalizationModel(nn.Module):
             all_span_ends.extend(batch_span_ends)
             all_output_spans.extend(batch_output_spans)
 
+            for pred in batch_final_preds:
+                if 'Cherokee' in pred:
+                    break
+
         # Metrics
         tn_error_ctx, itn_error_ctx = 0, 0
-        for direction in constants.INST_DIRECTIONS:
+        for direction in ['FORWARD']: #constants.INST_DIRECTIONS:
             (
                 cur_dirs,
                 cur_inputs,
@@ -147,9 +151,11 @@ class DuplexTextNormalizationModel(nn.Module):
                     cur_output_spans.append(output_spans)
             nb_instances = len(cur_final_preds)
             cur_targets_sent = [" ".join(x) for x in cur_targets]
+            import pdb; pdb.set_trace()
             sent_accuracy = TextNormalizationTestDataset.compute_sent_accuracy(
                 cur_final_preds, cur_targets_sent, cur_dirs, self.lang
             )
+
             class_accuracy = TextNormalizationTestDataset.compute_class_accuracy(
                 [basic_tokenize(x, lang=self.lang) for x in cur_inputs],
                 cur_targets,
@@ -264,6 +270,12 @@ class DuplexTextNormalizationModel(nn.Module):
                     span_idx += 1
                     while jx < len(sent) and tags[jx] == constants.I_PREFIX + constants.TRANSFORM_TAG:
                         jx += 1
-            cur_output_str = self.decoder.processor.detokenize(cur_words)
+            # cur_output_str = self.decoder.processor.detokenize(cur_words)
+            cur_output_str = ' '.join(cur_words)
+            cur_output_str = ' '.join(basic_tokenize(cur_output_str, self.lang))
             final_outputs.append(cur_output_str)
+        # for s in sents:
+        #     if 'Cherokee' in s:
+        #         import pdb; pdb.set_trace()
+        #         print()
         return tag_preds, output_spans, final_outputs
