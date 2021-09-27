@@ -93,10 +93,6 @@ def main(cfg: DictConfig) -> None:
                     )
                     all_preds.extend([x for x in outputs[-1]])
                     batch = []
-            if len(all_preds) != len(lines):
-                import pdb
-
-                pdb.set_trace()
             assert len(all_preds) == len(lines)
             out_file = f'{file_name}_{mode}{extension}'
             with open(f'{out_file}', 'w') as f_out:

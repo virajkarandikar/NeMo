@@ -262,10 +262,11 @@ class DuplexTextNormalizationModel(nn.Module):
         if not pre_tokenization:
             sents = [x.split() for x in sents]
 
-        try:
-            # Prepare final outputs
-            final_outputs = []
-            for ix, (sent, tags) in enumerate(zip(sents, tag_preds)):
+
+        # Prepare final outputs
+        final_outputs = []
+        for ix, (sent, tags) in enumerate(zip(sents, tag_preds)):
+            try:
                 cur_words, jx, span_idx = [], 0, 0
                 cur_spans = output_spans[ix]
                 while jx < len(sent):
@@ -285,7 +286,7 @@ class DuplexTextNormalizationModel(nn.Module):
                     cur_output_str = ' '.join(cur_words)
                     cur_output_str = ' '.join(basic_tokenize(cur_output_str, self.lang))
                 final_outputs.append(cur_output_str)
-        except:
-            logging.warning(f"Sent #{ix} is too long and will be skipped - {' '.join(sent)}")
-            final_outputs.append(" ".join(sent))
+            except:
+                logging.warning(f"Sent #{ix} is too long and will be skipped - {' '.join(sent)}")
+                final_outputs.append(" ".join(sent))
         return tag_preds, output_spans, final_outputs
