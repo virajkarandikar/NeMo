@@ -75,4 +75,3 @@ class FractionFst(GraphFst):
         graph = pynini.compose(self.filter, graph.optimize()).optimize()
         graph = self.add_tokens(graph)
         self.fst = graph.optimize()
-

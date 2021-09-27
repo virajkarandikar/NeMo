@@ -67,6 +67,8 @@ def main(cfg: DictConfig) -> None:
         raise ValueError("Both pre-trained models (DuplexTaggerModel and DuplexDecoderModel) should be provided.")
     tagger_trainer, tagger_model = instantiate_model_and_trainer(cfg, TAGGER_MODEL, False)
     decoder_trainer, decoder_model = instantiate_model_and_trainer(cfg, DECODER_MODEL, False)
+    decoder_model._cfg.max_sequence_len = 512
+    tagger_model._cfg.max_sequence_len = 512
     tn_model = DuplexTextNormalizationModel(tagger_model, decoder_model, lang)
 
     if cfg.inference.get("from_file", False):
@@ -87,12 +89,14 @@ def main(cfg: DictConfig) -> None:
                 batch.append(line.strip())
                 if len(batch) == batch_size or i == len(lines) - 1:
                     outputs = tn_model._infer(
-                        batch,
-                        [constants.DIRECTIONS_TO_MODE[mode]] * len(batch),
-                        do_basic_tokenization=do_basic_tokenization,
+                        batch, [constants.DIRECTIONS_TO_MODE[mode]] * len(batch), pre_tokenization='moses',
                     )
                     all_preds.extend([x for x in outputs[-1]])
                     batch = []
+            if len(all_preds) != len(lines):
+                import pdb
+
+                pdb.set_trace()
             assert len(all_preds) == len(lines)
             out_file = f'{file_name}_{mode}{extension}'
             with open(f'{out_file}', 'w') as f_out:

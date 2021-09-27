@@ -265,11 +265,11 @@ class TextNormalizationTestDataset:
                 correct = TextNormalizationTestDataset.is_same(
                     " ".join(cur_words[class_idx]), targets[ix][target_token_idx], inst_directions[ix], lang
                 )
-                if correct == 0:
-                    print(cur_words)
-                    print(targets[ix])
-                    import pdb; pdb.set_trace()
-                    print()
+                # if correct == 0:
+                #     print(cur_words)
+                #     print(targets[ix])
+                #     import pdb; pdb.set_trace()
+                #     print()
                 class2correct[classes[ix][class_idx]] += correct
                 target_token_idx += 1
 
