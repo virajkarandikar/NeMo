@@ -262,7 +262,6 @@ class DuplexTextNormalizationModel(nn.Module):
         if not pre_tokenization:
             sents = [x.split() for x in sents]
 
-
         # Prepare final outputs
         final_outputs = []
         for ix, (sent, tags) in enumerate(zip(sents, tag_preds)):

@@ -55,4 +55,4 @@ class WhiteListFst(GraphFst):
         to_exclude = pynini.union(pynini.project(measure_units, "input"), pynini.project(currency, "input"))
         filter = pynini.difference(pynini.project(whitelist_accepted, "input"), to_exclude).optimize()
 
-        self.fst = pynini.compose(default_whitelist.fst, filter).optimize()
+        self.fst = pynini.compose(filter, default_whitelist.fst).optimize()
