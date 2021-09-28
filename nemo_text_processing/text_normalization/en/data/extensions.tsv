@@ -1,0 +1,159 @@
+.aif
+.cda
+.mid
+.midi
+.mp3
+.mpa
+.ogg
+.wav
+.wma
+.wpl
+.7z
+.arj
+.deb
+.pkg
+.rar - RAR file
+.rpm - Red Hat Package Manager
+.tar.gz - Tarball compressed file
+.z - Z compressed file
+.zip - Zip compressed file
+Disc and media file extensions
+When making an image of a disc or other media, all of the contained files are saved to an image file. Below are the most common disc image file extensions.
+
+.bin - Binary disc image
+.dmg - macOS X disk image
+.iso - ISO disc image
+.toast - Toast disc image
+.vcd - Virtual CD
+Data and database file extensions
+A data file could be any file, but for this list, we've listed the most common data files that relate to data used for a database, errors, information, importing, and exporting.
+
+.csv - Comma separated value file
+.dat - Data file
+.db or .dbf - Database file
+.log - Log file
+.mdb - Microsoft Access database file
+.sav - Save file (e.g., game save file)
+.sql - SQL database file
+.tar - Linux / Unix tarball file archive
+.xml - XML file
+E-mail file extensions
+Email
+Below is a list of the most common file extensions for e-mail and related files.
+
+.email - Outlook Express e-mail message file.
+.eml - E-mail message file from multiple e-mail clients, including Gmail.
+.emlx - Apple Mail e-mail file.
+.msg - Microsoft Outlook e-mail message file.
+.oft - Microsoft Outlook e-mail template file.
+.ost - Microsoft Outlook offline e-mail storage file.
+.pst - Microsoft Outlook e-mail storage file.
+.vcf - E-mail contact file.
+Executable file extensions
+java archive
+The most common executable file are files ending with the .exe file extension. However, other files can also be run by themselves or with the aid of an interpreter.
+
+.apk - Android package file
+.bat - Batch file
+.bin - Binary file
+.cgi or .pl - Perl script file
+.com - MS-DOS command file
+.exe - Executable file
+.gadget - Windows gadget
+.jar - Java Archive file
+.msi - Windows installer package
+.py - Python file
+.wsf - Windows Script File
+Font file extensions
+Below are the most common file extensions used with fonts.
+
+.fnt - Windows font file
+.fon - Generic font file
+.otf - Open type font file
+.ttf - TrueType font file
+Image file formats by file extension
+JPEG example
+There are many different image types and image file extensions that can be used when creating and saving images on the computer. Below is a list of the most common image file extensions.
+
+.ai - Adobe Illustrator file
+.bmp - Bitmap image
+.gif - GIF image
+.ico - Icon file
+.jpeg or .jpg - JPEG image
+.png - PNG image
+.ps - PostScript file
+.psd - PSD image
+.svg - Scalable Vector Graphics file
+.tif or .tiff - TIFF image
+.asp and .aspx - Active Server Page file
+.cer - Internet security certificate
+.cfm - ColdFusion Markup file
+.cgi or .pl - Perl script file
+.css - Cascading Style Sheet file
+.htm and .html - HTML file
+.js - JavaScript file
+.jsp - Java Server Page file
+.part - Partially downloaded file
+.php - PHP file
+.py - Python file
+.rss - RSS file
+.xhtml - XHTML file
+key - Keynote presentation
+.odp - OpenOffice Impress presentation file
+.pps - PowerPoint slide show
+.ppt - PowerPoint presentation
+.pptx - PowerPoint Open XML presentation
+.c - C and C++ source code file
+.cgi and .pl - Perl script file.
+.class - Java class file
+.cpp - C++ source code file
+.cs - Visual C# source code file
+.h - C, C++, and Objective-C header file
+.java - Java Source code file
+.php - PHP script file.
+.py - Python script file.
+.sh - Bash shell script
+.swift - Swift source code file
+.vb - Visual Basic file
+.ods - OpenOffice Calc spreadsheet file
+.xls - Microsoft Excel file
+.xlsm - Microsoft Excel file with macros
+.xlsx - Microsoft Excel Open XML spreadsheet file
+.bak - Backup file
+.cab - Windows Cabinet file
+.cfg - Configuration file
+.cpl - Windows Control panel file
+.cur - Windows cursor file
+.dll
+.dmp
+.drv
+.icns
+.ico
+.ini
+.lnk
+.msi
+.sys
+.tmp
+.3g2
+.3gp
+.avi
+.flv
+.h264
+.m4v
+.mkv
+.mov
+.mp4
+.mpg
+.mpeg
+.rm
+.swf
+.vob
+.wmv
+.doc
+.docx
+.odt
+.pdf
+.rtf
+.tex
+.txt
+.wpd

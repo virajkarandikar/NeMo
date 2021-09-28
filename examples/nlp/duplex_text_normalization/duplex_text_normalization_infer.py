@@ -62,13 +62,12 @@ from nemo.utils import logging
 def main(cfg: DictConfig) -> None:
     logging.info(f'Config Params: {OmegaConf.to_yaml(cfg)}')
     lang = cfg.lang
-    do_basic_tokenization = True
     if cfg.decoder_pretrained_model is None or cfg.tagger_pretrained_model is None:
         raise ValueError("Both pre-trained models (DuplexTaggerModel and DuplexDecoderModel) should be provided.")
     tagger_trainer, tagger_model = instantiate_model_and_trainer(cfg, TAGGER_MODEL, False)
     decoder_trainer, decoder_model = instantiate_model_and_trainer(cfg, DECODER_MODEL, False)
     decoder_model._cfg.max_sequence_len = 512
-    tagger_model._cfg.max_sequence_len = 512
+    tagger_model.max_sequence_len = 512
     tn_model = DuplexTextNormalizationModel(tagger_model, decoder_model, lang)
 
     if cfg.inference.get("from_file", False):
@@ -124,7 +123,7 @@ def main(cfg: DictConfig) -> None:
                 if cfg.mode in ['tn', 'joint']:
                     directions.append(constants.DIRECTIONS_TO_MODE[constants.TN_MODE])
                     inputs.append(test_input)
-                outputs = tn_model._infer(inputs, directions, do_basic_tokenization=do_basic_tokenization,)[-1]
+                outputs = tn_model._infer(inputs, directions, pre_tokenization='moses')[-1]
                 if cfg.mode in ['joint', 'itn']:
                     print(f'Prediction (ITN): {outputs[0]}')
                 if cfg.mode in ['joint', 'tn']:

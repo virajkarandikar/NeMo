@@ -51,6 +51,7 @@ class DuplexTaggerModel(NLPModel):
 
         self.model = AutoModelForTokenClassification.from_pretrained(cfg.transformer, num_labels=self.num_labels)
         self.transformer_name = cfg.transformer
+        self.max_sequence_len = cfg.get('max_sequence_len', self._tokenizer.model_max_length)
 
         # Loss Functions
         self.loss_fct = nn.CrossEntropyLoss(ignore_index=constants.LABEL_PAD_TOKEN_ID)
@@ -345,7 +346,7 @@ class DuplexTaggerModel(NLPModel):
             do_basic_tokenize=cfg.do_basic_tokenize,
             tagger_data_augmentation=tagger_data_augmentation,
             lang=self.lang,
-            max_seq_length=self._cfg.get('max_sequence_len', self._tokenizer.model_max_length),
+            max_seq_length=self.max_sequence_len,
             use_cache=cfg.get('use_cache', False),
             max_insts=cfg.get('max_insts', -1),
         )

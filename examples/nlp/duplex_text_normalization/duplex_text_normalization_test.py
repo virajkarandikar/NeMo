@@ -61,7 +61,7 @@ def main(cfg: DictConfig) -> None:
 
     if cfg.tagger_pretrained_model:
         tagger_trainer, tagger_model = instantiate_model_and_trainer(cfg, TAGGER_MODEL, False)
-        tagger_model._cfg.max_sequence_len = 512
+        tagger_model.max_sequence_len = 512
         # tagger_model.setup_test_data(cfg.data.test_ds)
         # logging.info('Evaluating the tagger...')
         # tagger_trainer.test(model=tagger_model, verbose=False)

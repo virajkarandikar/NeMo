@@ -109,12 +109,6 @@ class DuplexTextNormalizationModel(nn.Module):
             all_span_ends.extend(batch_span_ends)
             all_output_spans.extend(batch_output_spans)
 
-            for i, pred in enumerate(batch_final_preds):
-                if 'Cherokee' in pred:
-                    print(batch_final_preds[i])
-                    # import pdb; pdb.set_trace()
-                    # break
-
         # Metrics
         tn_error_ctx, itn_error_ctx = 0, 0
         for direction in ['FORWARD']:  # constants.INST_DIRECTIONS:

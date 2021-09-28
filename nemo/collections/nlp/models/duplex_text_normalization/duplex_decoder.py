@@ -66,7 +66,7 @@ class DuplexDecoderModel(NLPModel):
 
         super().__init__(cfg=cfg, trainer=trainer)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(cfg.transformer)
-        self.model_max_len = cfg.get('max_seq_length', 512)
+        self.model_max_len = cfg.get('max_seq_length', self._tokenizer.model_max_length)
         self.mode = cfg.get('mode', 'joint')
 
         self.transformer_name = cfg.transformer

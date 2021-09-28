@@ -86,7 +86,7 @@ class ClassifyFstSmall(GraphFst):
             word_graph = taggers.WordFst(deterministic=deterministic).fst
             # time_graph = TimeFst(cardinal=cardinal, deterministic=deterministic).fst
             # telephone_graph = TelephoneFst(deterministic=deterministic).fst
-            electonic_graph = taggers.ElectronicFst(deterministic=deterministic).fst
+            electonic_graph = taggers_small.ElectronicFst(deterministic=deterministic).fst
             money_graph = taggers_small.MoneyFst(
                 small_cardinal=cardinal_small, small_decimal=decimal_small, deterministic=deterministic,
             ).fst
@@ -95,11 +95,11 @@ class ClassifyFstSmall(GraphFst):
 
             classify = (
                 pynutil.add_weight(whitelist_graph, 1.01)
-                | pynutil.add_weight(decimal_graph, 1.1)
-                | pynutil.add_weight(measure_graph, 1.1)
-                | pynutil.add_weight(cardinal_graph, 1.1)
+                # | pynutil.add_weight(decimal_graph, 1.1)
+                # | pynutil.add_weight(measure_graph, 1.1)
+                # | pynutil.add_weight(cardinal_graph, 1.1)
                 # | pynutil.add_weight(ordinal_graph, 1.1)
-                | pynutil.add_weight(money_graph, 1.1)
+                # | pynutil.add_weight(money_graph, 1.1)
                 | pynutil.add_weight(electonic_graph, 1.1)
                 | pynutil.add_weight(fraction_graph, 1.1)
                 | pynutil.add_weight(word_graph, 100)

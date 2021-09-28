@@ -78,6 +78,7 @@ class Normalizer:
         self.tagger = ClassifyFst(
             input_case=input_case, deterministic=deterministic, cache_dir=cache_dir, overwrite_cache=overwrite_cache
         )
+        print(f"tagger: {type(self.tagger)} -- {self.tagger.fst.num_states()} num states")
         self.verbalizer = VerbalizeFinalFst(deterministic=deterministic)
         self.parser = TokenParser()
         self.lang = lang

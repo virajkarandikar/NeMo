@@ -24,3 +24,5 @@ $ 123.1~123 point one dollars
 1 12345/51~one and one two three four five slash five one
 12 1/12345~one two and one slash one two three four five
 1/2 and 12 53/5~1/2 and 12 53/5
+2.7.7.68~two dot seven dot seven dot six eight
+
