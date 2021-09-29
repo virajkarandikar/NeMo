@@ -88,7 +88,7 @@ def main(cfg: DictConfig) -> None:
                 batch.append(line.strip())
                 if len(batch) == batch_size or i == len(lines) - 1:
                     outputs = tn_model._infer(
-                        batch, [constants.DIRECTIONS_TO_MODE[mode]] * len(batch), pre_tokenization='moses',
+                        batch, [constants.DIRECTIONS_TO_MODE[mode]] * len(batch), do_basic_tokenization=True
                     )
                     all_preds.extend([x for x in outputs[-1]])
                     batch = []
@@ -123,7 +123,7 @@ def main(cfg: DictConfig) -> None:
                 if cfg.mode in ['tn', 'joint']:
                     directions.append(constants.DIRECTIONS_TO_MODE[constants.TN_MODE])
                     inputs.append(test_input)
-                outputs = tn_model._infer(inputs, directions, pre_tokenization='moses')[-1]
+                outputs = tn_model._infer(inputs, directions, do_basic_tokenization=True)[-1]
                 if cfg.mode in ['joint', 'itn']:
                     print(f'Prediction (ITN): {outputs[0]}')
                 if cfg.mode in ['joint', 'tn']:

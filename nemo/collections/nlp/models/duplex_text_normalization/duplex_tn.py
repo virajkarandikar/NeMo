@@ -219,7 +219,7 @@ class DuplexTextNormalizationModel(nn.Module):
         return results
 
     # Functions for inference
-    def _infer(self, sents: List[str], inst_directions: List[str], pre_tokenization='moses'):
+    def _infer(self, sents: List[str], inst_directions: List[str], do_basic_tokenization=True):
         """
         Main function for Inference
 
@@ -239,12 +239,8 @@ class DuplexTextNormalizationModel(nn.Module):
             final_outputs: A list of str where each str is the final output text for an input text.
         """
         # Separate into words
-        if pre_tokenization == 'moses':
-            sents = [self.decoder.processor.tokenize(x).split() for x in sents]
-        elif pre_tokenization == 'basic':
-            sents = [self.decoder.processor.tokenize(x).split() for x in sents]
-        elif pre_tokenization:
-            raise ValueError(f"Pre-tokenization options ['moses', 'basic']")
+        if do_basic_tokenization:
+            sents = [basic_tokenize(x, self.lang) for x in sents]
 
         # Tagging
         # span_ends included, returns index wrt to words in input without auxiliary words
@@ -253,8 +249,8 @@ class DuplexTextNormalizationModel(nn.Module):
         )
         output_spans = self.decoder._infer(sents, nb_spans, span_starts, span_ends, inst_directions)
 
-        if not pre_tokenization:
-            sents = [x.split() for x in sents]
+        # if not do_basic_tokenization:
+        #     sents = [x.split() for x in sents]
 
         # Prepare final outputs
         final_outputs = []
@@ -273,9 +269,9 @@ class DuplexTextNormalizationModel(nn.Module):
                         span_idx += 1
                         while jx < len(sent) and tags[jx] == constants.I_PREFIX + constants.TRANSFORM_TAG:
                             jx += 1
-                if pre_tokenization == 'moses':
-                    cur_output_str = self.decoder.processor.detokenize(cur_words)
-                else:
+                    # if pre_tokenization == 'moses':
+                    #     cur_output_str = self.decoder.processor.detokenize(cur_words)
+                    # else:
                     cur_output_str = ' '.join(cur_words)
                     cur_output_str = ' '.join(basic_tokenize(cur_output_str, self.lang))
                 final_outputs.append(cur_output_str)

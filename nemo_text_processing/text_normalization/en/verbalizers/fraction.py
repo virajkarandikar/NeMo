@@ -36,7 +36,7 @@ class FractionFst(GraphFst):
             for False multiple transduction are generated (used for audio-based normalization)
     """
 
-    def __init__(self, add_endings=False, deterministic: bool = True):
+    def __init__(self, deterministic: bool = True):
         super().__init__(name="fraction", kind="verbalize", deterministic=deterministic)
         suffix = OrdinalFst().suffix
 
@@ -53,23 +53,20 @@ class FractionFst(GraphFst):
 
         integer = pynini.closure(integer + insert_space + conjunction, 0, 1)
 
-        if add_endings:
-            denominator_half = pynini.cross("numerator: \"one\" denominator: \"two\"", "a half")
-            denominator_one_two = pynini.cross("denominator: \"one\"", "over one") | pynini.cross(
-                "denominator: \"two\"", "halves"
-            )
-            fraction_default = pynutil.add_weight(
-                numerator + insert_space + denominator + pynutil.insert("s") + pynutil.delete("\""), 0.001
-            )
-            fraction_with_one = pynutil.add_weight(
-                numerator_one + insert_space + denominator + pynutil.delete("\""), 0.0001
-            )
+        denominator_half = pynini.cross("numerator: \"one\" denominator: \"two\"", "a half")
+        denominator_one_two = pynini.cross("denominator: \"one\"", "over one") | pynini.cross(
+            "denominator: \"two\"", "halves"
+        )
+        fraction_default = pynutil.add_weight(
+            numerator + insert_space + denominator + pynutil.insert("s") + pynutil.delete("\""), 0.001
+        )
+        fraction_with_one = pynutil.add_weight(
+            numerator_one + insert_space + denominator + pynutil.delete("\""), 0.0001
+        )
 
-            graph = integer + denominator_half | (fraction_with_one | fraction_default)
-            graph |= pynutil.add_weight(pynini.cross("numerator: \"one\" denominator: \"two\"", "one half"), -1)
-            graph |= (numerator | numerator_one) + insert_space + denominator_one_two
-        else:
-            graph = integer + numerator + denominator
+        graph = integer + denominator_half | (fraction_with_one | fraction_default)
+        graph |= pynutil.add_weight(pynini.cross("numerator: \"one\" denominator: \"two\"", "one half"), -1)
+        graph |= (numerator | numerator_one) + insert_space + denominator_one_two
 
         self.graph = graph
         delete_tokens = self.delete_tokens(self.graph)
