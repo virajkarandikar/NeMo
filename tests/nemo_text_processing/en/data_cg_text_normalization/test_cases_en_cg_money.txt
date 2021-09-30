@@ -1,0 +1,9 @@
+$12345.0001~one two three four five point zero zero zero one dollars
+$12345.1~one two three four five point one dollars
+$.0001~point zero zero zero one dollars
+$123.1~123 point one dollars
+$ 123.1~123 point one dollars
+$123~$123
+$ 12345.0001~one two three four five point zero zero zero one dollars
+$ 12345.1~one two three four five point one dollars
+$ .0001~point zero zero zero one dollars

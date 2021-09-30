@@ -14,8 +14,7 @@
 # limitations under the License.
 
 from nemo_text_processing.text_normalization.en.graph_utils import NEMO_DIGIT, GraphFst
-from nemo_text_processing.text_normalization.en.taggers.decimal import DecimalFst as defaultDecimalFst
-from nemo_text_processing.text_normalization.en.utils import get_abs_path
+from pynini.lib.rewrite import top_rewrite
 
 try:
     import pynini
@@ -40,9 +39,27 @@ class DecimalFst(GraphFst):
     def __init__(self, cardinal: GraphFst, deterministic: bool):
         super().__init__(name="decimal", kind="classify", deterministic=deterministic)
 
-        default_decimal = defaultDecimalFst(cardinal=cardinal, deterministic=deterministic)
-        filter = pynini.union(
-            pynini.closure(NEMO_DIGIT) + pynini.accep(".") + NEMO_DIGIT ** (4, ...),
-            NEMO_DIGIT ** (5, ...) + pynini.accep(".") + pynini.closure(NEMO_DIGIT, 1),
+        large_integer_part = (
+            cardinal.optional_minus_graph + pynutil.insert("integer_part: \"") + cardinal.graph + pynutil.insert("\"")
         )
-        self.fst = pynini.compose(filter, default_decimal.fst).optimize()
+        small_integer_part = (
+            pynutil.insert("integer_part: \"")
+            + pynini.closure(pynini.accep("-"), 0, 1)
+            + NEMO_DIGIT ** (0, 4)
+            + pynutil.insert("\"")
+        )
+        integer_part = pynutil.add_weight(large_integer_part, -100) | small_integer_part
+
+        # large_fractional_part = pynini.cross(".", "") + pynutil.insert("fractional_part: \"") + pynini.compose(NEMO_DIGIT ** (4, ...), cardinal.single_digits_graph) + pynutil.insert("\"")
+        # small_fractional_part = pynini.cross(".", "") + pynutil.insert("fractional_part: \"") + pynini.closure(NEMO_DIGIT ** (0, 3)) + pynutil.insert("\"")
+        # fractional_part = pynutil.add_weight(large_fractional_part, -100) | small_fractional_part
+
+        fractional_part = (
+            pynini.cross(".", "")
+            + pynutil.insert("fractional_part: \"")
+            + cardinal.single_digits_graph
+            + pynutil.insert("\"")
+        )
+
+        self.final_graph = pynini.closure(integer_part + pynutil.insert(" "), 0, 1) + fractional_part
+        self.fst = self.add_tokens(self.final_graph.optimize())

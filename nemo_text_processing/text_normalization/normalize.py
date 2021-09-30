@@ -65,7 +65,7 @@ class Normalizer:
             from nemo_text_processing.text_normalization.en.taggers_small.tokenize_and_classify import (
                 ClassifyFstSmall as ClassifyFst,
             )
-            from nemo_text_processing.text_normalization.en.verbalizers.verbalize_final import VerbalizeFinalFst
+            from nemo_text_processing.text_normalization.en.verbalizers_small.verbalize_final import VerbalizeFinalFst
         elif lang == 'en' and not deterministic:
             from nemo_text_processing.text_normalization.en.taggers.tokenize_and_classify_with_audio import ClassifyFst
             from nemo_text_processing.text_normalization.en.verbalizers.verbalize_final import VerbalizeFinalFst
@@ -78,6 +78,7 @@ class Normalizer:
         self.tagger = ClassifyFst(
             input_case=input_case, deterministic=deterministic, cache_dir=cache_dir, overwrite_cache=overwrite_cache
         )
+        print(f"tagger: {type(self.tagger)} -- {self.tagger.fst.num_states()} num states")
         self.verbalizer = VerbalizeFinalFst(deterministic=deterministic)
         self.parser = TokenParser()
         self.lang = lang

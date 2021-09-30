@@ -233,6 +233,7 @@ class TextNormalizationTestDataset:
             return 'NA'
         class2stats, class2correct = defaultdict(int), defaultdict(int)
         for ix, (sent, tags) in enumerate(zip(inputs, tag_preds)):
+            assert len(inputs) == len(tag_preds)
             cur_words = [[] for _ in range(nb_spans[ix])]
             jx, span_idx = 0, 0
             cur_spans = output_spans[ix]
@@ -264,6 +265,11 @@ class TextNormalizationTestDataset:
                 correct = TextNormalizationTestDataset.is_same(
                     " ".join(cur_words[class_idx]), targets[ix][target_token_idx], inst_directions[ix], lang
                 )
+                # if correct == 0:
+                #     print(cur_words)
+                #     print(targets[ix])
+                #     import pdb; pdb.set_trace()
+                #     print()
                 class2correct[classes[ix][class_idx]] += correct
                 target_token_idx += 1
 

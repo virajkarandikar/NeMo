@@ -66,7 +66,7 @@ class DuplexDecoderModel(NLPModel):
 
         super().__init__(cfg=cfg, trainer=trainer)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(cfg.transformer)
-        self.model_max_len = cfg.get('max_seq_length', 512)
+        self.model_max_len = cfg.get('max_seq_length', self._tokenizer.model_max_length)
         self.mode = cfg.get('mode', 'joint')
 
         self.transformer_name = cfg.transformer
@@ -151,6 +151,9 @@ class DuplexDecoderModel(NLPModel):
         generated_texts, _, _ = self._generate_predictions(
             input_ids=batch['input_ids'], model_max_len=self.model_max_len
         )
+        generated_texts_old, _, _ = self._generate_predictions(
+            input_ids=batch['input_ids'], model_max_len=self.model_max_len
+        )
 
         input_centers = self._tokenizer.batch_decode(batch['input_center'], skip_special_tokens=True)
         direction = [x[0].item() for x in batch['direction']]
@@ -158,15 +161,22 @@ class DuplexDecoderModel(NLPModel):
         # apply post_processing
         generated_texts = self.postprocess_output_spans(input_centers, generated_texts, direction_str)
         results = defaultdict(int)
+        fraction = False
         for idx, class_id in enumerate(batch['semiotic_class_id']):
             direction = constants.TASK_ID_TO_MODE[batch['direction'][idx][0].item()]
             class_name = self._val_id_to_class[dataloader_idx][class_id[0].item()]
+            if 'FRACTION' in class_name:
+                fraction = True
             results[f"correct_{class_name}_{direction}"] += torch.tensor(
                 labels_str[idx] == generated_texts[idx], dtype=torch.int
             ).to(self.device)
             results[f"total_{class_name}_{direction}"] += torch.tensor(1).to(self.device)
 
         results[f"{split}_loss"] = val_loss
+        if fraction:
+            import pdb
+
+            pdb.set_trace()
         return dict(results)
 
     def multi_validation_epoch_end(self, outputs: List, dataloader_idx=0, split="val"):

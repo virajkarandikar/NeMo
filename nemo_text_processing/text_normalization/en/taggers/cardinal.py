@@ -91,8 +91,10 @@ class CardinalFst(GraphFst):
 
         self.optional_minus_graph = pynini.closure(pynutil.insert("negative: ") + pynini.cross("-", "\"true\" "), 0, 1)
 
+        final_graph = self.graph | self.get_serial_graph()
+
         long_numbers = pynini.compose(NEMO_DIGIT ** (5, ...), self.single_digits_graph).optimize()
-        final_graph = self.graph | self.get_serial_graph() | pynutil.add_weight(long_numbers, -0.001)
+        final_graph |= pynutil.add_weight(long_numbers, -0.001)
 
         if not deterministic:
             final_graph |= self.range_graph

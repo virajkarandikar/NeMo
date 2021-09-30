@@ -89,7 +89,6 @@ class ElectronicFst(GraphFst):
             + domain
             + delete_space
         )
-        graph |= protocol + delete_space
 
         delete_tokens = self.delete_tokens(graph)
         self.fst = delete_tokens.optimize()

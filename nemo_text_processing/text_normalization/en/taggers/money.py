@@ -53,30 +53,38 @@ class MoneyFst(GraphFst):
         cardinal_graph = cardinal.graph
         graph_decimal_final = decimal.final_graph_wo_negative
 
-        unit_singular = pynini.string_file(get_abs_path("data/currency/currency.tsv"))
-        unit_plural = convert_space(unit_singular @ SINGULAR_TO_PLURAL)
-        unit_singular = convert_space(unit_singular)
+        unit_singular_raw = pynini.string_file(get_abs_path("data/currency/currency.tsv"))
+        unit_plural = convert_space(unit_singular_raw @ SINGULAR_TO_PLURAL)
+        unit_singular = convert_space(unit_singular_raw)
+        self.currency_unit = (unit_singular | unit_singular_raw).optimize()
 
         graph_unit_singular = pynutil.insert("currency: \"") + unit_singular + pynutil.insert("\"")
         graph_unit_plural = pynutil.insert("currency: \"") + unit_plural + pynutil.insert("\"")
 
+        space = insert_space | pynini.accep(" ")
         singular_graph = (
-            graph_unit_singular + pynutil.insert(" integer_part: \"") + pynini.cross("1", "one") + pynutil.insert("\"")
+            graph_unit_singular
+            + space
+            + pynutil.insert("integer_part: \"")
+            + pynini.cross("1", "one")
+            + pynutil.insert("\"")
         )
 
-        graph_decimal = graph_unit_plural + insert_space + graph_decimal_final
+        graph_decimal = graph_unit_plural + space + graph_decimal_final
 
         if deterministic:
             graph_integer = (
                 graph_unit_plural
-                + pynutil.insert(" integer_part: \"")
+                + space
+                + pynutil.insert("integer_part: \"")
                 + ((NEMO_SIGMA - "1") @ cardinal_graph)
                 + pynutil.insert("\"")
             )
         else:
             graph_integer = (
                 graph_unit_plural
-                + pynutil.insert(" integer_part: \"")
+                + space
+                + pynutil.insert("integer_part: \"")
                 + ((NEMO_SIGMA - "1") @ (get_hundreds_graph(deterministic) | cardinal_graph))
                 + pynutil.insert("\"")
             )

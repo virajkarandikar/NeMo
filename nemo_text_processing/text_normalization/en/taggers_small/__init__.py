@@ -14,5 +14,8 @@
 
 from nemo_text_processing.text_normalization.en.taggers_small.cardinal import CardinalFst
 from nemo_text_processing.text_normalization.en.taggers_small.decimal import DecimalFst
-
-# from nemo_text_processing.text_normalization.en.taggers_small.ordinal import OrdinalFst
+from nemo_text_processing.text_normalization.en.taggers_small.electronic import ElectronicFst
+from nemo_text_processing.text_normalization.en.taggers_small.fraction import FractionFst
+from nemo_text_processing.text_normalization.en.taggers_small.measure import MeasureFst
+from nemo_text_processing.text_normalization.en.taggers_small.money import MoneyFst
+from nemo_text_processing.text_normalization.en.taggers_small.whitelist import WhiteListFst

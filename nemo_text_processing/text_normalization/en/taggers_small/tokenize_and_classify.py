@@ -62,42 +62,46 @@ class ClassifyFstSmall(GraphFst):
             logging.info(f'ClassifyFst.fst was restored from {far_file}.')
         else:
             logging.info(f"Creating ClassifyFst grammars.")
-            cardinal = taggers_small.CardinalFst(deterministic=deterministic)
-            cardinal_graph = cardinal.fst
-            # import pdb; pdb.set_trace()
+            cardinal_small = taggers_small.CardinalFst(deterministic=deterministic)
+            default_cardinal = taggers.CardinalFst(deterministic=deterministic)
+            cardinal_graph = cardinal_small.fst
 
             # ordinal = taggers_small.OrdinalFst(cardinal=cardinal, deterministic=deterministic)
             # ordinal_graph = ordinal.fst
 
-            decimal = taggers_small.DecimalFst(cardinal=taggers.CardinalFst(), deterministic=deterministic)
-            decimal_graph = decimal.fst
-            # fraction = FractionFst(deterministic=deterministic, cardinal=cardinal)
-            # fraction_graph = fraction.fst
-            #
-            # measure = MeasureFst(cardinal=cardinal, decimal=decimal, fraction=fraction, deterministic=deterministic)
-            # measure_graph = measure.fst
+            decimal_small = taggers_small.DecimalFst(cardinal=cardinal_small, deterministic=deterministic)
+            decimal_graph = decimal_small.fst
+            fraction = taggers_small.FractionFst(deterministic=deterministic, small_cardinal=cardinal_small)
+            fraction_graph = fraction.fst
+
+            measure = taggers_small.MeasureFst(
+                small_cardinal=cardinal_small,
+                small_decimal=decimal_small,
+                fraction=taggers.FractionFst(default_cardinal),
+                deterministic=deterministic,
+            )
+            measure_graph = measure.fst
             # date_graph = DateFst(cardinal=cardinal, deterministic=deterministic).fst
-            # import pdb; pdb.set_trace()
+
             word_graph = taggers.WordFst(deterministic=deterministic).fst
             # time_graph = TimeFst(cardinal=cardinal, deterministic=deterministic).fst
             # telephone_graph = TelephoneFst(deterministic=deterministic).fst
-            electonic_graph = taggers.ElectronicFst(deterministic=deterministic).fst
-            # money_graph = MoneyFst(cardinal=cardinal, decimal=decimal, deterministic=deterministic).fst
-            whitelist_graph = taggers.WhiteListFst(input_case=input_case, deterministic=deterministic).fst
+            electonic_graph = taggers_small.ElectronicFst(deterministic=deterministic).fst
+            money_graph = taggers_small.MoneyFst(
+                small_cardinal=cardinal_small, small_decimal=decimal_small, deterministic=deterministic,
+            ).fst
+            whitelist_graph = taggers_small.WhiteListFst(input_case=input_case, deterministic=deterministic).fst
             punct_graph = taggers.PunctuationFst(deterministic=deterministic).fst
 
             classify = (
                 pynutil.add_weight(whitelist_graph, 1.01)
-                # | pynutil.add_weight(time_graph, 1.1)
-                # | pynutil.add_weight(date_graph, 1.09)
                 | pynutil.add_weight(decimal_graph, 1.1)
-                # | pynutil.add_weight(measure_graph, 1.1)
+                | pynutil.add_weight(measure_graph, 1.1)
                 | pynutil.add_weight(cardinal_graph, 1.1)
                 # | pynutil.add_weight(ordinal_graph, 1.1)
-                # | pynutil.add_weight(money_graph, 1.1)
-                # | pynutil.add_weight(telephone_graph, 1.1)
+                | pynutil.add_weight(money_graph, 1.1)
                 | pynutil.add_weight(electonic_graph, 1.1)
-                # | pynutil.add_weight(fraction_graph, 1.1)
+                | pynutil.add_weight(fraction_graph, 1.1)
                 | pynutil.add_weight(word_graph, 100)
             )
 

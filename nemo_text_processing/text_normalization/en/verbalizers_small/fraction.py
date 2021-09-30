@@ -38,35 +38,17 @@ class FractionFst(GraphFst):
 
     def __init__(self, deterministic: bool = True):
         super().__init__(name="fraction", kind="verbalize", deterministic=deterministic)
-        suffix = OrdinalFst().suffix
 
         integer = pynutil.delete("integer_part: \"") + pynini.closure(NEMO_NOT_QUOTE) + pynutil.delete("\" ")
         numerator = pynutil.delete("numerator: \"") + pynini.closure(NEMO_NOT_QUOTE) + pynutil.delete("\" ")
-        numerator_one = pynutil.delete("numerator: \"") + pynini.accep("one") + pynutil.delete("\" ")
-        denominator = pynutil.delete("denominator: \"") + (
-            pynini.closure(NEMO_NOT_QUOTE) @ suffix | pynutil.add_weight(pynini.cross('four', 'quarter'), -1)
+        denominator = (
+            insert_space + pynutil.delete("denominator: \"") + pynini.closure(NEMO_NOT_QUOTE) + pynutil.delete("\"")
+        )
+        denominator |= pynutil.add_weight(
+            pynutil.delete("denominator: \"") + pynini.cross("NONE", "") + pynutil.delete("\""), -0.1
         )
 
-        conjunction = pynutil.insert("and ")
-        if not deterministic:
-            conjunction = pynini.closure(conjunction, 0, 1)
-
-        integer = pynini.closure(integer + insert_space + conjunction, 0, 1)
-
-        denominator_half = pynini.cross("numerator: \"one\" denominator: \"two\"", "a half")
-        denominator_one_two = pynini.cross("denominator: \"one\"", "over one") | pynini.cross(
-            "denominator: \"two\"", "halves"
-        )
-        fraction_default = pynutil.add_weight(
-            numerator + insert_space + denominator + pynutil.insert("s") + pynutil.delete("\""), 0.001
-        )
-        fraction_with_one = pynutil.add_weight(
-            numerator_one + insert_space + denominator + pynutil.delete("\""), 0.0001
-        )
-
-        graph = integer + denominator_half | (fraction_with_one | fraction_default)
-        graph |= pynutil.add_weight(pynini.cross("numerator: \"one\" denominator: \"two\"", "one half"), -1)
-        graph |= (numerator | numerator_one) + insert_space + denominator_one_two
+        graph = pynini.closure(integer + insert_space, 0, 1) + numerator + denominator
 
         self.graph = graph
         delete_tokens = self.delete_tokens(self.graph)
