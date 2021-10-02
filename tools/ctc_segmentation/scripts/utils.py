@@ -30,7 +30,7 @@ def get_segments(
     output_file: str,
     vocabulary: List[str],
     window_size: int = 8000,
-    frame_duration_ms: int = 20,
+    frame_duration_ms: int = 10,
 ) -> None:
     """
     Segments the audio into segments and saves segments timings to a file
@@ -46,11 +46,12 @@ def get_segments(
         frame_duration_ms: frame duration in ms
     """
     config = cs.CtcSegmentationParameters()
+
     config.char_list = vocabulary
     config.min_window_size = window_size
-    config.frame_duration_ms = frame_duration_ms
-    config.blank = config.space
-    config.subsampling_factor = 2
+    config.index_duration = 0.0799983368347339
+    config.blank = -1
+    config.space = "▁"
 
     with open(transcript_file, "r") as f:
         text = f.readlines()
@@ -80,7 +81,22 @@ def get_segments(
     if len(text_normalized) != len(text):
         raise ValueError(f'{transcript_file} and {transcript_file_normalized} do not match')
 
-    ground_truth_mat, utt_begin_indices = cs.prepare_text(config, text)
+    # works for sentences
+    # from prepare_bpe import prepare_tokenized_text_nemo
+    # ground_truth_mat, utt_begin_indices = prepare_tokenized_text_nemo(text, vocabulary)
+
+    from prepare_bpe import prepare_tokenized_text
+    ground_truth_mat, utt_begin_indices = prepare_tokenized_text(text, vocabulary)
+    # text_repl = []
+    # for uttr in text:
+    #     text_repl.append(["▁" + t for t in uttr.split()])
+
+    # ground_truth_mat, utt_begin_indices = cs.prepare_text(config, text)
+    print(ground_truth_mat[:20])
+    print('-' * 40)
+    print(utt_begin_indices)
+    print(ground_truth_mat.shape)
+    # import pdb; pdb.set_trace()
     logging.debug(f"Syncing {transcript_file}")
     logging.debug(
         f"Audio length {os.path.basename(path_wav)}: {log_probs.shape[0]}. "
@@ -89,6 +105,11 @@ def get_segments(
 
     timings, char_probs, char_list = cs.ctc_segmentation(config, log_probs, ground_truth_mat)
     segments = cs.determine_utterance_segments(config, utt_begin_indices, char_probs, timings, text)
+
+    # print segments
+    for word, segment in zip(text, segments):
+        print(f"{segment[0]:.2f} {segment[1]:.2f} {segment[2]:3.4f} {word}")
+    # import pdb; pdb.set_trace()
     write_output(output_file, path_wav, segments, text, text_no_preprocessing, text_normalized)
 
 
@@ -99,7 +120,7 @@ def write_output(
     text: str,
     text_no_preprocessing: str,
     text_normalized: str,
-    stride: int = 2,
+    stride: int = 1,
 ):
     """
     Write the segmentation output to a file

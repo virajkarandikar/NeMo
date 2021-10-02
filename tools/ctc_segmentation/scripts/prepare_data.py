@@ -231,9 +231,12 @@ def split_text(
     sentences = additional_split(sentences, additional_split_symbols, max_length)
 
     # check to make sure there will be no utterances for segmentation with only OOV symbols
-    vocab_no_space_with_digits = set(vocabulary + [i for i in range(10)])
-    vocab_no_space_with_digits.remove(' ')
-    sentences = [s for s in sentences if len(vocab_no_space_with_digits.intersection(set(s))) > 0]
+    # vocabulary = "A, E, I, O, U, B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, X, Z, W,Y,'"
+    # vocabulary += vocabulary.lower()
+    # vocabulary = list(vocabulary)
+    # vocab_no_space_with_digits = set(vocabulary + [i for i in range(10)])
+    # vocab_no_space_with_digits.remove(' ')
+    # sentences = [s for s in sentences if len(vocab_no_space_with_digits.intersection(set(s))) > 0]
 
     if min_length > 0:
         sentences_comb = []
@@ -341,9 +344,9 @@ def split_text(
     if do_lower_case:
         sentences = sentences.lower()
 
-    # remove all OOV symbols
-    symbols_to_remove = ''.join(set(sentences).difference(set(vocabulary + ['\n'])))
-    sentences = sentences.translate(''.maketrans(symbols_to_remove, len(symbols_to_remove) * ' '))
+    # # remove all OOV symbols
+    # symbols_to_remove = ''.join(set(sentences).difference(set(vocabulary + ['\n'])))
+    # sentences = sentences.translate(''.maketrans(symbols_to_remove, len(symbols_to_remove) * ' '))
 
     # remove extra space
     sentences = re.sub(r' +', ' ', sentences)
@@ -368,9 +371,13 @@ if __name__ == '__main__':
             asr_model = nemo_asr.models.EncDecCTCModel.from_pretrained(args.model)
             vocabulary = asr_model.cfg.decoder.vocabulary
         else:
-            raise ValueError(
-                f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
-            )
+            try:
+                asr_model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(args.model)
+                vocabulary = asr_model.cfg.decoder.vocabulary
+            except:
+                raise ValueError(
+                    f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
+                )
 
         if os.path.isdir(args.in_text):
             text_files = Path(args.in_text).glob(("*.txt"))

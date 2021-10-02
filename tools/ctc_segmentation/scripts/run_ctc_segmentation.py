@@ -68,18 +68,20 @@ if __name__ == '__main__':
     elif args.model in nemo_asr.models.EncDecCTCModel.get_available_model_names():
         asr_model = nemo_asr.models.EncDecCTCModel.from_pretrained(args.model, strict=False)
     else:
-        raise ValueError(
-            f'{args.model} not a valid model name or path. Provide path to the pre-trained checkpoint '
-            f'or choose from {nemo_asr.models.EncDecCTCModel.list_available_models()}'
-        )
+        try:
+            asr_model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained(args.model)
+            vocabulary = asr_model.cfg.decoder.vocabulary
+        except:
+            raise ValueError(
+                f'Provide path to the pretrained checkpoint or choose from {nemo_asr.models.EncDecCTCModel.get_available_model_names()}'
+            )
 
     # extract ASR vocabulary and add blank symbol
-    vocabulary = asr_model.cfg.decoder.vocabulary
-    odim = len(vocabulary) + 1
+    vocabulary = asr_model.cfg.decoder.vocabulary + ["ε"]
     logging.debug(f'ASR Model vocabulary: {vocabulary}')
 
     # add blank to vocab
-    vocabulary = ["ε"] + list(vocabulary)
+    vocabulary = list(vocabulary)
     data = Path(args.data)
     output_dir = Path(args.output_dir)
 
@@ -117,10 +119,10 @@ if __name__ == '__main__':
         original_duration = len(signal) / sample_rate
         logging.debug(f'Duration: {original_duration}s, file_name: {path_audio}')
         log_probs = asr_model.transcribe(paths2audio_files=[str(path_audio)], batch_size=1, logprobs=True)[0]
-
+        # import pdb; pdb.set_trace()
         # move blank values to the first column
-        blank_col = log_probs[:, -1].reshape((log_probs.shape[0], 1))
-        log_probs = np.concatenate((blank_col, log_probs[:, :-1]), axis=1)
+        # blank_col = log_probs[:, -1].reshape((log_probs.shape[0], 1))
+        # log_probs = np.concatenate((blank_col, log_probs[:, :-1]), axis=1)
 
         all_log_probs.append(log_probs)
         all_segment_file.append(str(segment_file))
