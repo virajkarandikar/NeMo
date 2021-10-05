@@ -7,13 +7,20 @@ def prepare_tokenized_text_nemo(text, vocabulary):
     asr_model = nemo_asr.models.EncDecCTCModelBPE.from_pretrained("stt_en_citrinet_256")
     tokenizer = asr_model.tokenizer
     space_idx = vocabulary.index("▁")
+    blank_idx = len(vocabulary) - 1
 
     ground_truth_mat = [[-1]]
     utt_begin_indices = []
     for uttr in text:
+        ground_truth_mat += [[space_idx]]
         utt_begin_indices.append(len(ground_truth_mat))
         token_ids = tokenizer.text_to_ids(uttr)
-        ground_truth_mat += [[t] for t in token_ids]
+        uttr_ids = []
+        for id in token_ids:
+            uttr_ids.append([id])
+            # uttr_ids.append([space_idx])
+        ground_truth_mat += uttr_ids #[[t] for t in token_ids]
+        ground_truth_mat += [[space_idx]]
 
     utt_begin_indices.append(len(ground_truth_mat))
     ground_truth_mat += [[space_idx]]

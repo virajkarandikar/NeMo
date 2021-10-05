@@ -117,6 +117,7 @@ if __name__ == '__main__':
             raise
 
         original_duration = len(signal) / sample_rate
+        print(f'len(signal): {len(signal)}, sr: {sample_rate}')
         logging.debug(f'Duration: {original_duration}s, file_name: {path_audio}')
         log_probs = asr_model.transcribe(paths2audio_files=[str(path_audio)], batch_size=1, logprobs=True)[0]
         # import pdb; pdb.set_trace()

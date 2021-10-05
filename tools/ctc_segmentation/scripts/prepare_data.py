@@ -234,9 +234,11 @@ def split_text(
     # vocabulary = "A, E, I, O, U, B, C, D, F, G, H, J, K, L, M, N, P, Q, R, S, T, V, X, Z, W,Y,'"
     # vocabulary += vocabulary.lower()
     # vocabulary = list(vocabulary)
-    # vocab_no_space_with_digits = set(vocabulary + [i for i in range(10)])
-    # vocab_no_space_with_digits.remove(' ')
-    # sentences = [s for s in sentences if len(vocab_no_space_with_digits.intersection(set(s))) > 0]
+
+    vocab_no_space_with_digits = set(vocabulary + [i for i in range(10)])
+    if " " in vocab_no_space_with_digits:
+        vocab_no_space_with_digits.remove(' ')
+    sentences = [s for s in sentences if len(vocab_no_space_with_digits.intersection(set(s))) > 0]
 
     if min_length > 0:
         sentences_comb = []
@@ -344,10 +346,11 @@ def split_text(
     if do_lower_case:
         sentences = sentences.lower()
 
-    # # remove all OOV symbols
-    # symbols_to_remove = ''.join(set(sentences).difference(set(vocabulary + ['\n'])))
-    # sentences = sentences.translate(''.maketrans(symbols_to_remove, len(symbols_to_remove) * ' '))
-
+    # remove all OOV symbols
+    import string
+    # use QN vocabs for available languages
+    symbols_to_remove = string.punctuation.replace("'", "") # ''.join(set(sentences).difference(set(vocabulary + ['\n'])))
+    sentences = sentences.translate(''.maketrans(symbols_to_remove, len(symbols_to_remove) * ' '))
     # remove extra space
     sentences = re.sub(r' +', ' ', sentences)
     with open(out_file, "w") as f:

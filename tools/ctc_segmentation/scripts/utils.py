@@ -45,8 +45,8 @@ def get_segments(
         window_size: the length of each utterance (in terms of frames of the CTC outputs) fits into that window.
         frame_duration_ms: frame duration in ms
     """
+    print('log_probs:', log_probs.shape)
     config = cs.CtcSegmentationParameters()
-
     config.char_list = vocabulary
     config.min_window_size = window_size
     config.index_duration = 0.0799983368347339
@@ -81,21 +81,37 @@ def get_segments(
     if len(text_normalized) != len(text):
         raise ValueError(f'{transcript_file} and {transcript_file_normalized} do not match')
 
-    # works for sentences
+    # works for sentences CitriNet
     # from prepare_bpe import prepare_tokenized_text_nemo
     # ground_truth_mat, utt_begin_indices = prepare_tokenized_text_nemo(text, vocabulary)
+    # _print(ground_truth_mat, vocabulary)
 
-    from prepare_bpe import prepare_tokenized_text
-    ground_truth_mat, utt_begin_indices = prepare_tokenized_text(text, vocabulary)
+    # print(text[:2])
+    # import sys
+    # sys.path.append("/home/ebakhturina/misc_scripts/ctc_segmentation/LibriSpeech")
+    #
+    # from prepare_bpe2 import prepare_tokenized_text_nemo, prepare_tokenized_text, prepare_text
+    # ground_truth_mat, utt_begin_indices = prepare_text(text)
+
+    # from prepare_bpe import prepare_tokenized_text
+    # ground_truth_mat, utt_begin_indices = prepare_tokenized_text(text, vocabulary)
     # text_repl = []
     # for uttr in text:
     #     text_repl.append(["▁" + t for t in uttr.split()])
 
-    # ground_truth_mat, utt_begin_indices = cs.prepare_text(config, text)
-    print(ground_truth_mat[:20])
-    print('-' * 40)
-    print(utt_begin_indices)
-    print(ground_truth_mat.shape)
+    # QN
+    config = cs.CtcSegmentationParameters()
+    config.char_list = vocabulary
+    config.min_window_size = window_size
+    config.index_duration = 0.02
+    config.blank = vocabulary.index(" ")
+    config.space = " "
+    ground_truth_mat, utt_begin_indices = cs.prepare_text(config, text)
+    _print(ground_truth_mat, vocabulary)
+    # import pdb;
+    # pdb.set_trace()
+    print()
+
     # import pdb; pdb.set_trace()
     logging.debug(f"Syncing {transcript_file}")
     logging.debug(
@@ -106,12 +122,21 @@ def get_segments(
     timings, char_probs, char_list = cs.ctc_segmentation(config, log_probs, ground_truth_mat)
     segments = cs.determine_utterance_segments(config, utt_begin_indices, char_probs, timings, text)
 
-    # print segments
-    for word, segment in zip(text, segments):
-        print(f"{segment[0]:.2f} {segment[1]:.2f} {segment[2]:3.4f} {word}")
-    # import pdb; pdb.set_trace()
+    # # print segments
+    # for word, segment in zip(text, segments):
+    #     print(f"{segment[0]:.2f} {segment[1]:.2f} {segment[2]:3.4f} {word}")
+
     write_output(output_file, path_wav, segments, text, text_no_preprocessing, text_normalized)
 
+def _print(ground_truth_mat, vocabulary):
+    chars = []
+    for row in ground_truth_mat:
+        chars.append([])
+        for ch_id in row:
+            if ch_id != -1:
+                chars[-1].append(vocabulary[int(ch_id)])
+
+    print([print(x) for x in chars[:20]])
 
 def write_output(
     out_path: str,
@@ -120,7 +145,7 @@ def write_output(
     text: str,
     text_no_preprocessing: str,
     text_normalized: str,
-    stride: int = 1,
+    stride: int = 2,
 ):
     """
     Write the segmentation output to a file

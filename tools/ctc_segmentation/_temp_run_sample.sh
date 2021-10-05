@@ -4,7 +4,7 @@
 MIN_SCORE=-100
 CUT_PREFIX=18
 SCRIPTS_DIR="scripts"
-OFFSET=-180
+OFFSET=0
 LANGUAGE='eng' # 'eng', 'ru', 'other'
 MIN_SEGMENT_LEN=0
 MAX_SEGMENT_LEN=1
@@ -13,10 +13,10 @@ AUDIO_FORMAT='.mp3'
 USE_NEMO_NORMALIZATION='False'
 
 DATA_DIR="/home/ebakhturina/data/segmentation/test/data"
-MODEL_NAME_OR_PATH=stt_en_citrinet_256 # "QuartzNet15x5Base-En" #
-OUTPUT_DIR="/home/ebakhturina/data/segmentation/test/out_${MODEL_NAME_OR_PATH}"
+MODEL_NAME_OR_PATH="QuartzNet15x5Base-En" #stt_en_citrinet_256 # "QuartzNet15x5Base-En" #
+OUTPUT_DIR="/home/ebakhturina/data/segmentation/test/out_${MODEL_NAME_OR_PATH}_2"
 
-#rm -rf ${OUTPUT_DIR}
+rm -rf ${OUTPUT_DIR}
 
 for ARG in "$@"
 do
@@ -68,22 +68,22 @@ NEMO_NORMALIZATION=""
       NEMO_NORMALIZATION="--use_nemo_normalization "
     fi
 
-## STEP #1
-## Prepare text and audio data for segmentation
-#python $SCRIPTS_DIR/prepare_data.py \
-#--in_text=$DATA_DIR/text \
-#--audio_dir=$DATA_DIR/audio \
-#--audio_format=$AUDIO_FORMAT \
-#--output_dir=$OUTPUT_DIR/processed/ \
-#--language=$LANGUAGE \
-#--cut_prefix=$CUT_PREFIX \
-#--model=$MODEL_NAME_OR_PATH \
-#--min_length=$MIN_SEGMENT_LEN \
-#--max_length=$MAX_SEGMENT_LEN \
-#--additional_split_symbols=$ADDITIONAL_SPLIT_SYMBOLS $NEMO_NORMALIZATION || exit
+# STEP #1
+# Prepare text and audio data for segmentation
+python $SCRIPTS_DIR/prepare_data.py \
+--in_text=$DATA_DIR/text \
+--audio_dir=$DATA_DIR/audio \
+--audio_format=$AUDIO_FORMAT \
+--output_dir=$OUTPUT_DIR/processed/ \
+--language=$LANGUAGE \
+--cut_prefix=$CUT_PREFIX \
+--model=$MODEL_NAME_OR_PATH \
+--min_length=$MIN_SEGMENT_LEN \
+--max_length=$MAX_SEGMENT_LEN \
+--additional_split_symbols=$ADDITIONAL_SPLIT_SYMBOLS $NEMO_NORMALIZATION || exit
 
 # STEP #2
-# Run CTC-segmenatation
+# Run CTC-segmentation
 # one might want to perform alignment with various window sizes
 # note if the alignment with the initial window size isn't found, the window size will be double to re-attempt
 # alignment
@@ -130,11 +130,11 @@ python $SCRIPTS_DIR/process_manifests.py \
 
 python /home/ebakhturina/NeMo/examples/asr/transcribe_speech.py \
 pretrained_name=$MODEL_NAME_OR_PATH \
-dataset_manifest=/home/ebakhturina/data/segmentation/test/out_${MODEL_NAME_OR_PATH}/all_manifest.json \
-output_filename=/home/ebakhturina/data/segmentation/test/out_${MODEL_NAME_OR_PATH}/manifests/transcribed_${MODEL_NAME_OR_PATH}.json
+dataset_manifest=${OUTPUT_DIR}/all_manifest.json \
+output_filename=${OUTPUT_DIR}/manifests/transcribed_${MODEL_NAME_OR_PATH}.json
 
 
 python /home/ebakhturina/NeMo/tools/speech_data_explorer/data_explorer.py \
 --port 8055 \
-/home/ebakhturina/data/segmentation/test/out_${MODEL_NAME_OR_PATH}/manifests/transcribed_${MODEL_NAME_OR_PATH}.json
+${OUTPUT_DIR}/manifests/transcribed_${MODEL_NAME_OR_PATH}.json
 
