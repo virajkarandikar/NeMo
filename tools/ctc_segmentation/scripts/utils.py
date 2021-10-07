@@ -104,12 +104,13 @@ def get_segments(
     config.char_list = vocabulary
     config.min_window_size = window_size
     config.index_duration = 0.02
-    config.blank = vocabulary.index(" ")
-    config.space = " "
+    # config.space = " "
+    config.blank = vocabulary.index(" ") #len(vocabulary) - 1 #config.space #vocabulary.index(" ")
+    # config.space = " "
     ground_truth_mat, utt_begin_indices = cs.prepare_text(config, text)
     _print(ground_truth_mat, vocabulary)
-    # import pdb;
-    # pdb.set_trace()
+    import pdb;
+    pdb.set_trace()
     print()
 
     # import pdb; pdb.set_trace()
@@ -122,7 +123,7 @@ def get_segments(
     timings, char_probs, char_list = cs.ctc_segmentation(config, log_probs, ground_truth_mat)
     segments = cs.determine_utterance_segments(config, utt_begin_indices, char_probs, timings, text)
 
-    # # print segments
+    print(segments)
     # for word, segment in zip(text, segments):
     #     print(f"{segment[0]:.2f} {segment[1]:.2f} {segment[2]:3.4f} {word}")
 

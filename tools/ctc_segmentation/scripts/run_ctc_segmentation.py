@@ -77,11 +77,9 @@ if __name__ == '__main__':
             )
 
     # extract ASR vocabulary and add blank symbol
-    vocabulary = asr_model.cfg.decoder.vocabulary + ["ε"]
+    vocabulary = list(asr_model.cfg.decoder.vocabulary) + ["ε"]
     logging.debug(f'ASR Model vocabulary: {vocabulary}')
 
-    # add blank to vocab
-    vocabulary = list(vocabulary)
     data = Path(args.data)
     output_dir = Path(args.output_dir)
 
@@ -120,7 +118,8 @@ if __name__ == '__main__':
         print(f'len(signal): {len(signal)}, sr: {sample_rate}')
         logging.debug(f'Duration: {original_duration}s, file_name: {path_audio}')
         log_probs = asr_model.transcribe(paths2audio_files=[str(path_audio)], batch_size=1, logprobs=True)[0]
-        # import pdb; pdb.set_trace()
+        [print(vocabulary[np.argmax(log_probs[i])]) for i in range(200)]
+        import pdb; pdb.set_trace()
         # move blank values to the first column
         # blank_col = log_probs[:, -1].reshape((log_probs.shape[0], 1))
         # log_probs = np.concatenate((blank_col, log_probs[:, :-1]), axis=1)
