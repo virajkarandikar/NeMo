@@ -27,7 +27,7 @@ from pytorch_lightning.utilities.types import _PATH
 from torch.nn.parallel import DistributedDataParallel
 
 from nemo.core.connectors.save_restore_connector import SaveRestoreConnector
-from nemo.utils import AppState, app_state, logging
+from nemo.utils import AppState, logging
 
 try:
     from apex.transformer import parallel_state
