@@ -16,6 +16,7 @@
 
 import torch
 from apex.transformer import parallel_state, tensor_parallel
+from nemo.utils import logging
 
 
 def param_is_not_shared(param):
@@ -45,7 +46,6 @@ class MegatronModule(torch.nn.Module):
         if not self.share_word_embeddings:
             raise Exception('initialize_word_embeddings() was called but ' 'share_word_embeddings is false')
 
-        # TODO: pipeline model parallelism is not implemented in NeMo yet
         # This function just initializes the word embeddings in the final stage
         # when we are using pipeline parallelism. If we aren't using pipeline
         # parallelism there is nothing to do.
@@ -83,7 +83,7 @@ class MegatronModule(torch.nn.Module):
                     self.word_embeddings_weight().data, group=parallel_state.get_embedding_group()
                 )
         else:
-            print(
+            logging.warning(
                 "WARNING! Distributed processes aren't initialized, so "
                 "word embeddings in the last layer are not initialized. "
                 "If you are just manipulating a model this is fine, but "
