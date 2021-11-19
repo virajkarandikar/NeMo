@@ -24,6 +24,7 @@ from pytorch_lightning.plugins.environments.cluster_environment import ClusterEn
 from pytorch_lightning.plugins.io.checkpoint_plugin import CheckpointIO
 from pytorch_lightning.plugins.training_type.ddp import DDPPlugin
 from pytorch_lightning.utilities.types import _PATH
+from pytorch_lightning.loops.fit_loop import FitLoop
 from torch.nn.parallel import DistributedDataParallel
 
 from nemo.core.connectors.save_restore_connector import SaveRestoreConnector
@@ -82,18 +83,15 @@ class NLPDDPPlugin(DDPPlugin):
             # With model parallelism, multiple GPUs form a large "logical GPU"
             # this means that data parallel groups span multiple GPUs
             # and are non-trivial
+            # TODO: for megatron-lm self.model is a list
             device_ids = self.determine_ddp_device_ids()
-            # TODO: need to figure out how to do this without hardcoding self.lightning_module.model
-            self._model = [
-                DistributedDataParallel(
-                    LightningDistributedModule(model_module),
-                    device_ids=device_ids,
-                    output_device=device_ids[0],
-                    process_group=parallel_state.get_data_parallel_group(),
-                    **self._ddp_kwargs,
-                )
-                for model_module in self.lightning_module.model
-            ]
+            self._model = DistributedDataParallel(
+                LightningDistributedModule(self.model),
+                device_ids=device_ids,
+                output_device=device_ids[0],
+                process_group=parallel_state.get_data_parallel_group(),
+                **self._ddp_kwargs,
+            )
 
         else:
             super().configure_ddp()
@@ -328,3 +326,6 @@ class GradScaler(torch.cuda.amp.GradScaler):
 
         # To prepare for next iteration, clear the data collected from optimizers this iteration.
         self._per_optimizer_states = defaultdict(torch.cuda.amp.grad_scaler._refresh_per_optimizer_state)
+
+    class NLPFitLoop(FitLoop):
+        pass
