@@ -68,6 +68,7 @@ class MegatronGPTModel(NLPModel):
             local_rank=trainer.local_rank,
             tensor_model_parallel_size=cfg.get('tensor_model_parallel_size', 1),
             pipeline_model_parallel_size=cfg.get('pipeline_model_parallel_size', 1),
+            micro_batch_size=cfg.get('micro_batch_size'),
             seed=self.cfg.get('seed', 1234),
         )
 
@@ -103,9 +104,6 @@ class MegatronGPTModel(NLPModel):
             if self.cfg.get('existing_prompt_tags', None):
                 self.prompt_table = set(self.cfg.existing_prompt_tags)
         self.setup_optimizer_param_groups()
-
-        if self.cfg.pipeline_model_parallel_size > 1:
-            self.automatic_optimization = False
 
     def model_provider_func(self, pre_process, post_process):
         """Model depends on pipeline paralellism."""
@@ -188,8 +186,13 @@ class MegatronGPTModel(NLPModel):
         reduced_loss = None
         tokens, labels, loss_mask, attention_mask, position_ids = self.process_batch(batch)
         if self.cfg.get('pipeline_model_parallel_size', 1) > 1:
+            # TODO: figure out tensor_shape
             reduced_loss = forward_backward_pipelining_without_interleaving(
-                forward_step_func=self.get_forward_output_and_loss_fnc, batch=batch, model=self, forward_only=True
+                forward_step_func=self.get_forward_output_and_loss_fnc,
+                batch=batch,
+                model=self,
+                forward_only=True,
+                tensor_shape=None,
             )
         else:
             output_tensor = self(tokens, position_ids, attention_mask, labels)

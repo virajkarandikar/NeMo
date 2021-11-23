@@ -13,10 +13,12 @@
 # limitations under the License.
 
 import random
-from apex.transformer.utils import ensure_divisibility
+from apex.transformer.pipeline_parallel.utils import setup_microbatch_calculator
 
 import numpy as np
 import torch
+
+from apex.transformer.utils import ensure_divisibility
 from apex.transformer import tensor_parallel
 from apex.transformer.parallel_state import (
     get_pipeline_model_parallel_rank,
@@ -26,13 +28,19 @@ from apex.transformer.parallel_state import (
     set_tensor_model_parallel_world_size,
 )
 
-from nemo.collections.nlp.modules.common.megatron.megatron_utils import compute_tensor_model_parallel_rank
 from nemo.utils import AppState, logging
 
 
 def initialize_model_parallel_for_nemo(
-    world_size, global_rank, local_rank, tensor_model_parallel_size=1, pipeline_model_parallel_size=1, seed=1234,
+    world_size,
+    global_rank,
+    local_rank,
+    tensor_model_parallel_size=1,
+    pipeline_model_parallel_size=1,
+    micro_batch_size=None,
+    seed=1234,
 ):
+    """ micro_batch_size needed for_setup_microbatch_calculator for pipeline parallelism """
 
     # updating NeMo globals
     app_state = AppState()
@@ -45,6 +53,7 @@ def initialize_model_parallel_for_nemo(
         app_state.tensor_model_parallel_rank,
         app_state.pipeline_model_parallel_rank,
         app_state.model_parallel_size,
+        app_state.data_parallel_size,
     ) = fake_initialize_model_parallel(
         world_size=world_size,
         rank=global_rank,
@@ -61,6 +70,18 @@ def initialize_model_parallel_for_nemo(
     set_pipeline_model_parallel_world_size(app_state.pipeline_model_parallel_size)
 
     _set_random_seed(seed)
+
+    if pipeline_model_parallel_size > 1:
+        # TODO: does this global_batch_size need to account for gradient accumulation?
+        global_batch_size = micro_batch_size * app_state.data_parallel_size
+        # TODO: add rampup_batch_size here when we have it implemented
+        setup_microbatch_calculator(
+            rank=global_rank,
+            global_batch_size=global_batch_size,
+            micro_batch_size=micro_batch_size,
+            data_parallel_size=app_state.data_parallel_size,
+            rampup_batch_size=None,
+        )
 
     app_state._is_megatron_initialized = True
 
@@ -239,4 +260,4 @@ def fake_initialize_model_parallel(
     logging.info(f'All embedding group ranks: {all_pipeline_model_parallel_group_ranks}')
     logging.info(f'Rank {rank} has embedding rank: {embedding_rank}')
 
-    return tensor_model_parallel_rank, pipeline_model_parallel_rank, model_parallel_size
+    return tensor_model_parallel_rank, pipeline_model_parallel_rank, model_parallel_size, data_parallel_size
