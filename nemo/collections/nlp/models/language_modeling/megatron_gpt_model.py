@@ -158,6 +158,9 @@ class MegatronGPTModel(NLPModel):
                 forward_only=False,
                 tensor_shape=tensor_shape,
             )
+            # only pipeline last stage will have losses to log
+            if not parallel_state.is_pipeline_last_stage():
+                return
         else:
             output_tensor = self(tokens, position_ids, attention_mask, labels)
             loss = self.loss_func(loss_mask, output_tensor)
@@ -177,6 +180,16 @@ class MegatronGPTModel(NLPModel):
             self._reduced_loss_buffer = []
 
         return loss
+
+    def backward(self, *args, **kwargs):
+        """ LightningModule hook to do backward.
+            When using pipeline parallel, we run backward in the fwd/bwd function.
+            No need to call it here.
+        """
+        if self.cfg.get('pipeline_model_parallel_size', 1) > 1:
+            return
+        else:
+            super().backward(*args, **kwargs)
 
     def get_forward_output_and_loss_func(self):
         def fwd_output_and_loss_func(batch, model):

@@ -17,6 +17,7 @@ import shutil
 import tempfile
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Union
+from pytorch_lightning.plugins.precision.native_amp import NativeMixedPrecisionPlugin
 
 import torch
 from pytorch_lightning.overrides import LightningDistributedModule
@@ -326,9 +327,3 @@ class GradScaler(torch.cuda.amp.GradScaler):
 
         # To prepare for next iteration, clear the data collected from optimizers this iteration.
         self._per_optimizer_states = defaultdict(torch.cuda.amp.grad_scaler._refresh_per_optimizer_state)
-
-    class NLPFitLoop(FitLoop):
-        pass
-
-
-# TODO: implement
