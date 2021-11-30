@@ -12,17 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from pathlib import Path
-
 from omegaconf.omegaconf import OmegaConf, open_dict
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.timer import Timer
 from pytorch_lightning.plugins.environments.torchelastic_environment import TorchElasticEnvironment
 from pytorch_lightning.plugins.precision.native_amp import NativeMixedPrecisionPlugin
-from pytorch_lightning.trainer.connectors.checkpoint_connector import CheckpointConnector
 
 from nemo.collections.nlp.models.language_modeling.megatron_gpt_model import MegatronGPTModel
-from nemo.collections.nlp.modules.common.megatron.megatron_utils import compute_tensor_model_parallel_rank
 from nemo.collections.nlp.parts.nlp_overrides import GradScaler, NLPDDPPlugin
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
@@ -49,21 +45,6 @@ def main(cfg) -> None:
 
     exp_manager(trainer, cfg.exp_manager)
 
-    # update resume from checkpoint found by exp_manager
-    resume_from_checkpoint = trainer.checkpoint_connector.resume_from_checkpoint_fit_path
-    # TODO: update checkpointing for pipeline parallel
-    if resume_from_checkpoint is not None:
-        # inject mp_rank into resume_from_checkpoint
-        if cfg.model.tensor_model_parallel_size is not None and cfg.model.tensor_model_parallel_size > 1:
-            mp_rank = compute_tensor_model_parallel_rank(trainer.local_rank, cfg.model.tensor_model_parallel_size)
-            resume_from_checkpoint = Path(resume_from_checkpoint)
-            resume_from_checkpoint = resume_from_checkpoint.parent.parent.joinpath(f'mp_rank_{mp_rank:02d}').joinpath(
-                resume_from_checkpoint.name
-            )
-            resume_from_checkpoint = str(resume_from_checkpoint)
-        logging.info(f'Resuming training from checkpoint: {resume_from_checkpoint}')
-
-    trainer.checkpoint_connector = CheckpointConnector(trainer, resume_from_checkpoint=resume_from_checkpoint)
     # Override timer callback to a stateless one
     for idx, callback in enumerate(trainer.callbacks):
         if isinstance(callback, Timer):

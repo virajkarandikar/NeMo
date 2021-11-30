@@ -45,6 +45,7 @@ from nemo.collections.nlp.modules.common.megatron.utils import (
     init_method_normal,
 )
 from nemo.collections.nlp.modules.common.tokenizer_utils import get_nmt_tokenizer
+from nemo.collections.nlp.parts.utils_funcs import inject_model_parallel_rank
 from nemo.utils import AppState, app_state, logging
 
 
@@ -242,13 +243,12 @@ class MegatronGPTModel(NLPModel):
 
         if outputs is not None:
             averaged_loss = torch.stack(outputs).mean()
-        
+
         else:
             averaged_loss = 0.0
 
         self.log('val_loss', averaged_loss, prog_bar=True)
         self.log('consumed_samples', self.compute_consumed_samples(self.trainer.global_step))
-        
 
     def test_step(self, batch, batch_idx):
         return self.validation_step(batch, batch_idx)
@@ -389,13 +389,19 @@ class MegatronGPTModel(NLPModel):
         """
         if stage == 'predict':
             return
-        else:
-            # TODO: consider adding a ModelPT guard to check if model is being restored.
-            # allowing restored models to optionally setup datasets
-            self.build_train_valid_test_datasets()
-            self.setup_training_data(self.cfg.data)
-            self.setup_validation_data(self.cfg.data)
-            self.setup_test_data(self.cfg.data)
+
+        # inject model parallel rank into resume path
+        if self.trainer.checkpoint_connector.resume_from_checkpoint_fit_path is not None:
+            self.trainer.checkpoint_connector.resume_from_checkpoint_fit_path = inject_model_parallel_rank(
+                self.trainer.checkpoint_connector.resume_from_checkpoint_fit_path
+            )
+
+        # TODO: consider adding a ModelPT guard to check if model is being restored.
+        # allowing restored models to optionally setup datasets
+        self.build_train_valid_test_datasets()
+        self.setup_training_data(self.cfg.data)
+        self.setup_validation_data(self.cfg.data)
+        self.setup_test_data(self.cfg.data)
 
         # when using pipeline model parallel the final stage need to initialize word embeddings
         # if not using pipeline parallel, then this call will do nothing

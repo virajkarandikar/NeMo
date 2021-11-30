@@ -36,6 +36,7 @@ from pytorch_lightning.plugins.training_type.ddp import DDPPlugin
 from pytorch_lightning.trainer.states import RunningStage
 from pytorch_lightning.utilities.distributed import rank_zero_info
 from pytorch_lightning.utilities.types import _METRIC
+from nemo.collections.nlp.parts.utils_funcs import uninject_model_parallel_rank
 
 from nemo.constants import NEMO_ENV_VARNAME_TESTING, NEMO_ENV_VARNAME_VERSION
 from nemo.utils import logging, timers
@@ -435,6 +436,7 @@ def check_resume(
     elif len(last_checkpoints) > 1:
         if 'mp_rank' or 'tp_rank' in str(last_checkpoints[0]):
             checkpoint = last_checkpoints[0]
+            checkpoint = uninject_model_parallel_rank(str(checkpoint))
         else:
             raise ValueError(f"Multiple checkpoints {last_checkpoints} that matches *last.ckpt.")
     else:
@@ -712,7 +714,7 @@ class NeMoModelCheckpoint(ModelCheckpoint):
         checkpoints = list(Path(self.dirpath).rglob("*.ckpt"))
         for checkpoint in checkpoints:
             if self.tensor_model_parallel_size is not None and self.tensor_model_parallel_size > 1:
-                checkpoint = self._uninject_mp_rank(checkpoint)
+                checkpoint = uninject_model_parallel_rank(checkpoint)
             checkpoint = str(checkpoint)
             if checkpoint[-10:] == '-last.ckpt':
                 continue
@@ -746,12 +748,6 @@ class NeMoModelCheckpoint(ModelCheckpoint):
         self.best_model_path = best_k_models[0]
         self.best_model_score = self.best_k_models[self.best_model_path]
 
-    @staticmethod
-    def _uninject_mp_rank(filepath):
-        dirname = os.path.dirname(os.path.dirname(filepath))
-        basename = os.path.basename(filepath)
-        filepath = os.path.join(dirname, basename)
-        return filepath
 
     def on_save_checkpoint(self, trainer, pl_module, checkpoint):
         output = super().on_save_checkpoint(trainer, pl_module, checkpoint)
@@ -886,10 +882,10 @@ def configure_checkpointing(
 
     checkpoint_callback = NeMoModelCheckpoint(n_resume=resume, **params)
     checkpoint_callback.last_model_path = trainer.checkpoint_connector.resume_from_checkpoint_fit_path or ""
-    if params.tensor_model_parallel_size is not None and params.tensor_model_parallel_size > 1:
-        checkpoint_callback.last_model_path = NeMoModelCheckpoint._uninject_mp_rank(
-            checkpoint_callback.last_model_path
-        )
+    # if params.tensor_model_parallel_size is not None and params.tensor_model_parallel_size > 1:
+    #     checkpoint_callback.last_model_path = uninject_model_parallel_rank(
+    #         checkpoint_callback.last_model_path
+    #     )
     trainer.callbacks.append(checkpoint_callback)
 
 
