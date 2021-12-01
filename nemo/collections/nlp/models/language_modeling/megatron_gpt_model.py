@@ -485,7 +485,7 @@ class MegatronGPTModel(NLPModel):
         if clip_val <= 0:
             return
 
-        parameters = [param for param in self.model.parameters() if param.requires_grad]
+        parameters = self.get_parameters()
         clip_grad_norm_fp32(parameters=parameters, max_norm=clip_val)
 
     def prompt_tuning_freeze(self):
@@ -541,6 +541,13 @@ class MegatronGPTModel(NLPModel):
         request = {"tokens": buckets, "prompt_tags": bucket_prompt_tags}
 
         return request, positions, tokens_to_generate, compute_logprobs[0]
+
+    def get_parameters(self):
+        params = []
+        for param_group in self._optimizer_param_groups:
+            for param in param_group['params']:
+                params.append(param)
+        return params
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: Optional[int] = None) -> Any:
         request, positions, tokens_to_generate, compute_logprobs = MegatronGPTModel._bucketize_gpt_inference(
