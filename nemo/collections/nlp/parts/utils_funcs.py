@@ -22,6 +22,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix
 from torch import Tensor
+import torch
 
 from nemo.utils import logging
 from nemo.utils.app_state import AppState
@@ -156,3 +157,10 @@ def uninject_model_parallel_rank(filepath):
         return filepath
     else:
         return filepath
+
+def is_last_rank():
+    return torch.distributed.get_rank() == (
+        torch.distributed.get_world_size() - 1)
+
+def get_last_rank():
+    return torch.distributed.get_world_size() - 1
