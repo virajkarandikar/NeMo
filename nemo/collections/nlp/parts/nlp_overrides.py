@@ -86,6 +86,7 @@ class NLPDDPPlugin(DDPPlugin):
             # this means that data parallel groups span multiple GPUs
             # and are non-trivial
             # TODO: for megatron-lm self.model is a list
+            self.pre_configure_ddp()
             device_ids = self.determine_ddp_device_ids()
             self._model = DistributedDataParallel(
                 LightningDistributedModule(self.model),
@@ -94,6 +95,7 @@ class NLPDDPPlugin(DDPPlugin):
                 process_group=parallel_state.get_data_parallel_group(),
                 **self._ddp_kwargs,
             )
+            self._register_ddp_hooks()
 
         else:
             super().configure_ddp()
