@@ -38,6 +38,7 @@ def initialize_model_parallel_for_nemo(
     tensor_model_parallel_size=1,
     pipeline_model_parallel_size=1,
     micro_batch_size=None,
+    global_batch_size=None,
     seed=1234,
 ):
     """ micro_batch_size needed for_setup_microbatch_calculator for pipeline parallelism """
@@ -71,9 +72,7 @@ def initialize_model_parallel_for_nemo(
 
     _set_random_seed(seed)
 
-    if pipeline_model_parallel_size > 1:
-        # TODO: does this global_batch_size need to account for gradient accumulation?
-        global_batch_size = micro_batch_size * app_state.data_parallel_size
+    if global_batch_size and micro_batch_size is not None:
         # TODO: add rampup_batch_size here when we have it implemented
         setup_microbatch_calculator(
             rank=global_rank,
