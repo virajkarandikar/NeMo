@@ -19,7 +19,11 @@ from pytorch_lightning.plugins.environments.torchelastic_environment import Torc
 from pytorch_lightning.plugins.precision.native_amp import NativeMixedPrecisionPlugin
 
 from nemo.collections.nlp.models.language_modeling.megatron_gpt_model import MegatronGPTModel
-from nemo.collections.nlp.parts.nlp_overrides import GradScaler, NLPDDPPlugin
+from nemo.collections.nlp.parts.nlp_overrides import (
+    GradScaler,
+    NLPDDPPlugin,
+    NLPDataConnector,
+)
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import StatelessTimer, exp_manager
@@ -42,6 +46,8 @@ def main(cfg) -> None:
         plugins.append(TorchElasticEnvironment())
 
     trainer = Trainer(plugins=plugins, **cfg.trainer)
+
+    trainer._data_connector = NLPDataConnector(trainer)
 
     exp_manager(trainer, cfg.exp_manager)
 

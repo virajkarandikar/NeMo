@@ -17,7 +17,20 @@ import shutil
 import tempfile
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Union
+from apex.transformer.pipeline_parallel.utils import get_num_microbatches
+from deprecate.utils import void
+from pytorch_lightning.loops.epoch.evaluation_epoch_loop import EvaluationEpochLoop
+from pytorch_lightning.loops.epoch.training_epoch_loop import TrainingEpochLoop
+from pytorch_lightning.loops.utilities import _update_dataloader_iter
 from pytorch_lightning.plugins.precision.native_amp import NativeMixedPrecisionPlugin
+from pytorch_lightning.trainer.connectors.data_connector import DataConnector
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
+from pytorch_lightning.utilities.fetching import (
+    AbstractDataFetcher,
+    DataFetcher,
+    DataLoaderIterDataFetcher,
+    InterBatchParallelDataFetcher,
+)
 
 import torch
 from pytorch_lightning.overrides import LightningDistributedModule
@@ -134,7 +147,7 @@ class NLPDDPPlugin(DDPPlugin):
         # TODO: move to CheckpointIO
         filepath = inject_model_parallel_rank(filepath)
         return super().save_checkpoint(checkpoint, filepath)
-    
+
     def load_checkpoint(self, checkpoint_path: _PATH) -> Dict[str, Any]:
         """ PTL override to accomodate model parallel checkpoints """
         # TODO: move to CheckpointIO
@@ -208,9 +221,12 @@ class NLPSaveRestoreConnector(SaveRestoreConnector):
                         # move weights to the tmpdir
                         for tp_rank in range(app_state.tensor_model_parallel_size):
                             os.makedirs(os.path.join(tmpdir, f'mp_rank_{tp_rank:02d}'))
-                            mp_model_weights = os.path.join(dir_name, f'mp_rank_{tp_rank:02d}_' + self.model_weights_ckpt)
+                            mp_model_weights = os.path.join(
+                                dir_name, f'mp_rank_{tp_rank:02d}_' + self.model_weights_ckpt
+                            )
                             shutil.move(
-                                mp_model_weights, os.path.join(tmpdir, f'mp_rank_{tp_rank:02d}', self.model_weights_ckpt)
+                                mp_model_weights,
+                                os.path.join(tmpdir, f'mp_rank_{tp_rank:02d}', self.model_weights_ckpt),
                             )
 
                         # create config and artifacts in tmpdir
@@ -223,7 +239,9 @@ class NLPSaveRestoreConnector(SaveRestoreConnector):
                         # create tar file
                         self._make_nemo_file_from_folder(save_path, tmpdir)
                 else:
-                    logging.info("Saving .nemo for pipeline parallel is not implemented yet. Please use a conversion script.")
+                    logging.info(
+                        "Saving .nemo for pipeline parallel is not implemented yet. Please use a conversion script."
+                    )
 
         else:
             return super().save_to(model, save_path)
@@ -333,3 +351,73 @@ class GradScaler(torch.cuda.amp.GradScaler):
 
         # To prepare for next iteration, clear the data collected from optimizers this iteration.
         self._per_optimizer_states = defaultdict(torch.cuda.amp.grad_scaler._refresh_per_optimizer_state)
+
+
+from pytorch_lightning.utilities.signature_utils import is_param_in_hook_signature
+from pytorch_lightning.utilities.warnings import rank_zero_warn
+
+
+class NLPDataConnector(DataConnector):
+    """ Override PTL DataConnector. Used to select custom data fetcher."""
+
+    def __init__(
+        self,
+        trainer: "pl.Trainer",
+        multiple_trainloader_mode: str = "max_size_cycle",
+        train_data_fetcher: Optional[AbstractDataFetcher] = None,
+        validate_data_fetcher: Optional[AbstractDataFetcher] = None,
+        test_data_fetcher: Optional[AbstractDataFetcher] = None,
+    ):
+
+        if not HAVE_APEX:
+            logging.warning("Apex was not found. Using model parallel or megatron models will error out.")
+
+        super().__init__(
+            trainer,
+            multiple_trainloader_mode=multiple_trainloader_mode,
+            train_data_fetcher=train_data_fetcher,
+            validate_data_fetcher=validate_data_fetcher,
+            test_data_fetcher=test_data_fetcher,
+        )
+
+    def _select_data_fetcher(self) -> AbstractDataFetcher:
+        if self.trainer.sanity_checking:
+            return GlobalBatchDataFetcher()
+
+        training_step_fx = getattr(self.trainer.lightning_module, "training_step")
+        if self.trainer.training and is_param_in_hook_signature(training_step_fx, "dataloader_iter", explicit=True):
+            rank_zero_warn(
+                "Found `dataloader_iter` argument in the `training_step`. Note that the support for "
+                "this signature is experimental and the behavior is subject to change."
+            )
+            return DataLoaderIterDataFetcher()
+
+        elif self.trainer.training and os.getenv("PL_INTER_BATCH_PARALLELISM", "0") == "1":
+            # note: this is an experimental feature
+            if not self.trainer.training_type_plugin.on_gpu:
+                raise MisconfigurationException("Inter batch parallelism is available only when using Nvidia GPUs.")
+            return InterBatchParallelDataFetcher()
+
+        return GlobalBatchDataFetcher()
+
+
+class GlobalBatchDataFetcher(DataFetcher):
+    """ Overrides PTL DataFetcher. Used to fetch global batches."""
+
+    def __init__(self, prefetch_batches: int = 0, store_on_device: bool = False) -> None:
+
+        if not HAVE_APEX:
+            logging.warning("Apex was not found. Using model parallel or megatron models will error out.")
+
+        super().__init__(prefetch_batches=prefetch_batches, store_on_device=store_on_device)
+        self.num_micro_batches = get_num_microbatches()
+
+    def _fetch_next_batch(self):
+        """ Fetches the next global batch which is a list of micro batches"""
+        with self.apply_profiler(f"get_{self.stage}_batch"):
+            with self.fetching_context():
+                data = self.on_fetch_start()
+                with self.apply_profiler(f"fetch_next_{self.stage}_batch"):
+                    batch = [next(self.dataloader_iter) for _ in range(self.num_micro_batches)]
+                self.fetched += 1
+                self.on_fetch_end(batch, data)
