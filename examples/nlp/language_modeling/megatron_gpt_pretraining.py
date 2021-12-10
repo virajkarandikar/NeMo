@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from torch.distributed.algorithms.ddp_comm_hooks.debugging_hooks import noop_hook
+
 from omegaconf.omegaconf import OmegaConf, open_dict
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks.timer import Timer
@@ -34,7 +36,8 @@ def main(cfg) -> None:
     logging.info("\n\n************** Experiment configuration ***********")
     logging.info(f'\n{OmegaConf.to_yaml(cfg)}')
 
-    plugins = [NLPDDPPlugin(num_nodes=cfg.trainer.num_nodes)]
+    # we use noop_hook to stop ddp from automatically all-reducing grads
+    plugins = [NLPDDPPlugin(num_nodes=cfg.trainer.num_nodes, ddp_comm_hook=noop_hook, find_unused_parameters=False)]
     if cfg.trainer.precision == 16:
         scaler = GradScaler(
             init_scale=cfg.model.get('native_amp_init_scale', 2 ** 32),
