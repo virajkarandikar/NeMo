@@ -27,6 +27,7 @@ from apex.transformer.parallel_state import (
     set_tensor_model_parallel_rank,
     set_tensor_model_parallel_world_size,
 )
+from apex.transformer.log_util import set_logging_level
 
 from nemo.utils import AppState, logging
 
@@ -40,6 +41,7 @@ def initialize_model_parallel_for_nemo(
     micro_batch_size=None,
     global_batch_size=None,
     seed=1234,
+    apex_transformer_log_level=30,
 ):
     """ micro_batch_size needed for_setup_microbatch_calculator for pipeline parallelism """
 
@@ -83,6 +85,8 @@ def initialize_model_parallel_for_nemo(
         )
 
     app_state._is_megatron_initialized = True
+
+    set_logging_level(apex_transformer_log_level)
 
 
 def _set_random_seed(seed_):
