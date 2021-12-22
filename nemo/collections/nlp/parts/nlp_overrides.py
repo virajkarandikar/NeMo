@@ -40,6 +40,8 @@ from pytorch_lightning.plugins.io.checkpoint_plugin import CheckpointIO
 from pytorch_lightning.plugins.training_type.ddp import DDPPlugin
 from pytorch_lightning.utilities.types import _PATH
 from pytorch_lightning.loops.fit_loop import FitLoop
+from pytorch_lightning.utilities.signature_utils import is_param_in_hook_signature
+from pytorch_lightning.utilities.warnings import rank_zero_warn
 from torch.nn.parallel import DistributedDataParallel
 from nemo.collections.nlp.parts.utils_funcs import inject_model_parallel_rank
 
@@ -353,10 +355,6 @@ class GradScaler(torch.cuda.amp.GradScaler):
 
         # To prepare for next iteration, clear the data collected from optimizers this iteration.
         self._per_optimizer_states = defaultdict(torch.cuda.amp.grad_scaler._refresh_per_optimizer_state)
-
-
-from pytorch_lightning.utilities.signature_utils import is_param_in_hook_signature
-from pytorch_lightning.utilities.warnings import rank_zero_warn
 
 
 class NLPDataConnector(DataConnector):
