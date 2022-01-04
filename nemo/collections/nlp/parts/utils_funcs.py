@@ -19,10 +19,10 @@ import time
 from typing import Dict, List, Union
 
 import numpy as np
+import torch
 from matplotlib import pyplot as plt
 from sklearn.metrics import classification_report, confusion_matrix
 from torch import Tensor
-import torch
 
 from nemo.utils import logging
 from nemo.utils.app_state import AppState
@@ -131,6 +131,7 @@ def get_classification_report(labels, preds, label_ids, output_dict=False):
 
     return classification_report(labels, preds, target_names=labels_names, digits=4, output_dict=output_dict)
 
+
 def inject_model_parallel_rank(filepath):
     """
     Injects tensor/pipeline model parallel ranks into the filepath.
@@ -149,6 +150,7 @@ def inject_model_parallel_rank(filepath):
     else:
         return filepath
 
+
 def uninject_model_parallel_rank(filepath):
     if 'mp_rank' or 'tp_rank' in filepath:
         dirname = os.path.dirname(os.path.dirname(filepath))
@@ -158,9 +160,10 @@ def uninject_model_parallel_rank(filepath):
     else:
         return filepath
 
+
 def is_last_rank():
-    return torch.distributed.get_rank() == (
-        torch.distributed.get_world_size() - 1)
+    return torch.distributed.get_rank() == (torch.distributed.get_world_size() - 1)
+
 
 def get_last_rank():
     return torch.distributed.get_world_size() - 1

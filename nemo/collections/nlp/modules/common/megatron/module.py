@@ -16,6 +16,7 @@
 
 import torch
 from apex.transformer import parallel_state, tensor_parallel
+
 from nemo.utils import logging
 
 
