@@ -146,7 +146,9 @@ class T5Model(MegatronModule):
             onnx_safe=onnx_safe,
         )
 
-        self.lm_head = T5LMHead(self.language_model.embedding.word_embeddings.weight.size(0), parallel_output)
+        self.initialize_word_embeddings(init_method_normal, vocab_size=vocab_size, hidden_size=hidden_size, max_position_embeddings=max_position_embeddings)
+
+        self.lm_head = T5LMHead(self.word_embeddings_weight().size(0), parallel_output)
         self._lm_head_key = 'lm_head'
 
     def set_input_tensor(self, input_tensor):

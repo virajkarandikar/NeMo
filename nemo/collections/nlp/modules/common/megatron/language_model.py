@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+from apex.transformer.enums import ModelType
 from apex.transformer import parallel_state, tensor_parallel
 from apex.transformer.enums import AttnMaskType, LayerType
 
@@ -566,6 +567,7 @@ class TransformerLanguageModel(MegatronModule):
         self.use_soft_prompts = use_soft_prompts
         self.prompt_tags = prompt_tags
         self.num_prompt_tokens = num_prompt_tokens
+        self.add_encoder = True # TODO: this was recently added in Megatron, should we add it as well?
 
         if kv_channels is None:
 
@@ -618,6 +620,7 @@ class TransformerLanguageModel(MegatronModule):
             persist_layer_norm=persist_layer_norm,
             openai_gelu=openai_gelu,
             onnx_safe=onnx_safe,
+            model_type=ModelType.encoder_and_decoder if self.add_decoder else ModelType.encoder_or_decoder,
         )
         self._encoder_key = 'encoder'
 
@@ -647,6 +650,7 @@ class TransformerLanguageModel(MegatronModule):
                 persist_layer_norm=persist_layer_norm,
                 openai_gelu=openai_gelu,
                 onnx_safe=onnx_safe,
+                model_type=ModelType.encoder_and_decoder if self.add_decoder else ModelType.encoder_or_decoder,
             )
             self._decoder_key = 'decoder'
 
@@ -658,12 +662,42 @@ class TransformerLanguageModel(MegatronModule):
 
     def set_input_tensor(self, input_tensor):
         """ See megatron.model.transformer.set_input_tensor()"""
+
+        # This is usually handled in schedules.py but some inference code still
+        # gives us non-lists or None
+        if not isinstance(input_tensor, list):
+            input_tensor = [input_tensor]
+
+        if self.add_encoder and self.add_decoder:
+            assert len(input_tensor) == 1, \
+                'input_tensor should only be length 1 for stage with both encoder and decoder'
+            self.encoder.set_input_tensor(input_tensor[0])
+        elif self.add_encoder:
+            assert len(input_tensor) == 1, \
+                'input_tensor should only be length 1 for stage with only encoder'
+            self.encoder.set_input_tensor(input_tensor[0])
+        elif self.add_decoder:
+            if len(input_tensor) == 2:
+                self.decoder.set_input_tensor(input_tensor[0])
+                self.encoder_hidden_state = input_tensor[1]
+            elif len(input_tensor) == 1:
+                self.decoder.set_input_tensor(None)
+                self.encoder_hidden_state = input_tensor[0]
+            else:
+                raise Exception('input_tensor must have either length 1 or 2')
+        else:
+            raise Exception('Stage must have at least either encoder or decoder')
+
+    '''
+    def set_input_tensor(self, input_tensor):
+        """ See megatron.model.transformer.set_input_tensor()"""
         # This is usually handled in schedules.py but some inference code still
         # gives us non-lists or None
         if not isinstance(input_tensor, list):
             input_tensor = [input_tensor]
 
         self.encoder.set_input_tensor(input_tensor[0])
+    '''
 
     def forward(
         self,

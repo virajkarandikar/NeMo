@@ -19,7 +19,7 @@ import math
 import torch
 import torch.nn.functional as F
 from apex.transformer import parallel_state, tensor_parallel
-from apex.transformer.enums import AttnMaskType, AttnType, LayerType
+from apex.transformer.enums import AttnMaskType, AttnType, LayerType, ModelType
 from apex.transformer.functional.fused_softmax import FusedScaleMaskSoftmax
 from apex.transformer.utils import divide as safe_divide
 
@@ -273,9 +273,14 @@ class ParallelAttention(MegatronModule):
         # [b, np, sq, sk]
         output_size = (query_layer.size(1), query_layer.size(2), query_layer.size(0), key_layer.size(0))
 
+        # print(self.attention_type)
+        # print(output_size)
+        # print(query_layer.shape)
+        # print(key_layer.shape)
         # [sq, b, np, hn] -> [sq, b * np, hn]
         query_layer = query_layer.view(output_size[2], output_size[0] * output_size[1], -1)
         # [sk, b, np, hn] -> [sk, b * np, hn]
+    
         key_layer = key_layer.view(output_size[3], output_size[0] * output_size[1], -1)
 
         # preallocting result tensor: [b * np, sq, sk]
@@ -624,6 +629,7 @@ class ParallelTransformer(MegatronModule):
         persist_layer_norm=False,
         openai_gelu=False,
         onnx_safe=False,
+        model_type=ModelType.encoder_or_decoder
     ):
         super(ParallelTransformer, self).__init__()
 
@@ -638,6 +644,7 @@ class ParallelTransformer(MegatronModule):
         self.post_process = post_process
         self.input_tensor = None
         self.self_attn_mask_type = self_attn_mask_type
+        self.model_type = model_type
 
         # Store activation checkpointing flag.
         self.activations_checkpoint_method = activations_checkpoint_method
@@ -673,10 +680,11 @@ class ParallelTransformer(MegatronModule):
                 onnx_safe=onnx_safe,
             )
 
-        if parallel_state.get_virtual_pipeline_model_parallel_rank() is not None:
+        if parallel_state.virtual_pipeline_model_parallel_size is not None:
             assert num_layers % parallel_state.get_virtual_pipeline_model_parallel_world_size() == 0, (
                 'num_layers_per_stage must be divisible by ' 'virtual_pipeline_model_parallel_size'
             )
+            assert args.model_type != ModelType.encoder_and_decoder
             # Number of layers in each model chunk is the number of layers in the stage,
             # divided by the number of model chunks in a stage.
             self.num_layers = self.num_layers // parallel_state.get_virtual_pipeline_model_parallel_world_size()
@@ -693,7 +701,16 @@ class ParallelTransformer(MegatronModule):
             ) + (parallel_state.get_pipeline_model_parallel_rank() * self.num_layers)
         else:
             # Each stage gets a contiguous set of layers.
-            offset = parallel_state.get_pipeline_model_parallel_rank() * self.num_layers
+            if args.model_type == ModelType.encoder_and_decoder and \
+                    parallel_state.get_pipeline_model_parallel_world_size() > 1:
+                pipeline_rank = parallel_state.get_pipeline_model_parallel_rank()
+                if layer_type == LayerType.encoder:
+                    offset = pipeline_rank * self.num_layers
+                else:
+                    num_ranks_in_enc = parallel_state.pipeline_model_parallel_split_rank
+                    offset = (pipeline_rank - num_ranks_in_enc) * self.num_layers
+            else:
+                offset = parallel_state.get_pipeline_model_parallel_rank() * self.num_layers
 
         self.layers = torch.nn.ModuleList([build_layer(i + 1 + offset) for i in range(self.num_layers)])
 

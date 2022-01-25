@@ -39,6 +39,17 @@ class MegatronModule(torch.nn.Module):
         self.share_word_embeddings = share_word_embeddings
 
     def word_embeddings_weight(self):
+        if not parallel_state.is_pipeline_last_stage(ignore_virtual=True) or \
+                parallel_state.get_pipeline_model_parallel_world_size() == 1:
+            return self.language_model.embedding.word_embeddings.weight
+        else:
+            if not self.share_word_embeddings:
+                raise Exception('word_embeddings_weight() called for last '
+                                'stage, but share_word_embeddings is false')
+            return self.word_embeddings.weight
+
+    '''
+    def word_embeddings_weight(self):
         if parallel_state.is_pipeline_first_stage(ignore_virtual=True):
             return self.language_model.embedding.word_embeddings.weight
         if parallel_state.is_pipeline_last_stage(ignore_virtual=True):
@@ -48,8 +59,9 @@ class MegatronModule(torch.nn.Module):
                 )
             return self.word_embeddings.weight
         raise Exception('word_embeddings_weight() should be ' 'called for first and last stage only')
+    '''
 
-    def initialize_word_embeddings(self, init_method, vocab_size, hidden_size):
+    def initialize_word_embeddings(self, init_method, vocab_size, hidden_size, max_position_embeddings):
         if not self.share_word_embeddings:
             raise Exception('initialize_word_embeddings() was called but ' 'share_word_embeddings is false')
 
@@ -81,6 +93,41 @@ class MegatronModule(torch.nn.Module):
             )
             self.word_embeddings.weight.data.fill_(0)
             self.word_embeddings.weight.shared = True
+
+        # Zero out initial weights for decoder embedding.
+        # NOTE: We don't currently support T5 with the interleaved schedule.
+        if not parallel_state.is_pipeline_first_stage(ignore_virtual=True) and \
+                not parallel_state.is_pipeline_last_stage(ignore_virtual=True) and \
+                parallel_state.is_rank_in_embedding_group():
+            self.language_model.embedding.zero_parameters()
+
+        # Ensure that first and last stages have the same initial parameter
+        # values.
+        if torch.distributed.is_initialized():
+            if parallel_state.is_rank_in_embedding_group():
+                torch.distributed.all_reduce(self.word_embeddings_weight().data,
+                                             group=parallel_state.get_embedding_group())
+                # All-reduce other embeddings as well as necessary. The last stage
+                # does not have these other embeddings, so just create placeholder
+                # tensors of the right shape with all zeros.
+                # NOTE: We don't currently support T5 with the interleaved schedule.
+                if parallel_state.pipeline_model_parallel_split_rank is not None:
+                    # TODO: Support tokentype embedding.
+                    dimensions = (max_position_embeddings, hidden_size)
+                    if parallel_state.is_pipeline_last_stage(ignore_virtual=True):
+                        position_embeddings = torch.nn.Embedding(*dimensions).cuda()
+                        position_embeddings.weight.data.fill_(0)
+                    else:
+                        self.language_model.embedding.cuda()
+                        position_embeddings = self.language_model.embedding.position_embeddings
+                    torch.distributed.all_reduce(position_embeddings.weight.data,
+                                                 group=parallel_state.get_embedding_group())
+        else:
+            print("WARNING! Distributed processes aren't initialized, so "
+                  "word embeddings in the last layer are not initialized. "
+                  "If you are just manipulating a model this is fine, but "
+                  "this needs to be handled manually. If you are training "
+                  "something is definitely wrong.")
 
     def sync_initial_word_embeddings(self):
 
