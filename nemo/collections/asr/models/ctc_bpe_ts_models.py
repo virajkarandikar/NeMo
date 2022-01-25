@@ -138,6 +138,32 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
 
         return {'loss': loss_value, 'log': tensorboard_logs}
 
+
+    def validation_step(self, batch, batch_idx, dataloader_idx=0):
+        signal, signal_len, transcript, transcript_len, embeddings = batch
+        if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
+            log_probs, encoded_len, predictions = self.forward(
+                processed_signal=signal, processed_signal_length=signal_len
+            )
+        else:
+            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, embeddings=embeddings)
+
+        loss_value = self.loss(
+            log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
+        )
+        self._wer.update(
+            predictions=predictions, targets=transcript, target_lengths=transcript_len, predictions_lengths=encoded_len
+        )
+        wer, wer_num, wer_denom = self._wer.compute()
+        self._wer.reset()
+        return {
+            'val_loss': loss_value,
+            'val_wer_num': wer_num,
+            'val_wer_denom': wer_denom,
+            'val_wer': wer,
+        }
+
+
     def _setup_dataloader_from_config(self, config: Optional[Dict]):
         if 'augmentor' in config:
             augmentor = process_augmentations(config['augmentor'])
