@@ -208,7 +208,7 @@ class MegatronT5Model(NLPModel):
                 tensor_shape=tensor_shape,
                 decoder_sequence_length=decoder_seq_length,
                 dtype=self.autocast_dtype,
-                grad_scaler=self.trainer.precision_plugin.scaler,
+                grad_scaler=self.trainer.precision_plugin.scaler if self.cfg.precision == 16 else None,
             )
         else:
             losses_reduced_per_micro_batch = forward_backward_no_pipelining(
@@ -217,7 +217,7 @@ class MegatronT5Model(NLPModel):
                 model=self.model,
                 forward_only=False,
                 tensor_shape=tensor_shape,
-                grad_scaler=self.trainer.precision_plugin.scaler,
+                grad_scaler=self.trainer.precision_plugin.scaler if self.cfg.precision == 16 else None,
             )
 
         # only the last stages of the pipeline return losses
