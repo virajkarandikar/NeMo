@@ -136,7 +136,6 @@ class ASRManifestProcessor:
             max_duration=max_duration,
             max_number=max_utts,
         )
-
         self.eos_id = eos_id
         self.bos_id = bos_id
         self.pad_id = pad_id

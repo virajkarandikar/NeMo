@@ -18,6 +18,7 @@ try:
     from nemo.collections.asr.models.classification_models import EncDecClassificationModel
     from nemo.collections.asr.models.clustering_diarizer import ClusteringDiarizer
     from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
+    from nemo.collections.asr.models.ctc_bpe_ts_models import TSEncDecCTCModelBPE
     from nemo.collections.asr.models.ctc_models import EncDecCTCModel
     from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
     from nemo.collections.asr.models.rnnt_bpe_models import EncDecRNNTBPEModel
@@ -30,6 +31,7 @@ except ModuleNotFoundError:
     class EncDecClassificationModel(CheckInstall): pass
     class ClusteringDiarizer(CheckInstall): pass
     class EncDecCTCModelBPE(CheckInstall): pass
+    class TSEncDecCTCModelBPE(CheckInstall): pass
     class EncDecCTCModel(CheckInstall): pass
     class EncDecSpeakerLabelModel(CheckInstall): pass
     class EncDecRNNTBPEModel(CheckInstall): pass
