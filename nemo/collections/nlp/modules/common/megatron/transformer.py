@@ -679,11 +679,11 @@ class ParallelTransformer(MegatronModule):
                 onnx_safe=onnx_safe,
             )
 
-        if parallel_state.virtual_pipeline_model_parallel_size is not None:
+        if parallel_state.get_virtual_pipeline_model_parallel_world_size() is not None:
             assert num_layers % parallel_state.get_virtual_pipeline_model_parallel_world_size() == 0, (
                 'num_layers_per_stage must be divisible by ' 'virtual_pipeline_model_parallel_size'
             )
-            assert args.model_type != ModelType.encoder_and_decoder
+            assert self.model_type != ModelType.encoder_and_decoder
             # Number of layers in each model chunk is the number of layers in the stage,
             # divided by the number of model chunks in a stage.
             self.num_layers = self.num_layers // parallel_state.get_virtual_pipeline_model_parallel_world_size()
@@ -700,7 +700,7 @@ class ParallelTransformer(MegatronModule):
             ) + (parallel_state.get_pipeline_model_parallel_rank() * self.num_layers)
         else:
             # Each stage gets a contiguous set of layers.
-            if args.model_type == ModelType.encoder_and_decoder and \
+            if self.model_type == ModelType.encoder_and_decoder and \
                     parallel_state.get_pipeline_model_parallel_world_size() > 1:
                 pipeline_rank = parallel_state.get_pipeline_model_parallel_rank()
                 if layer_type == LayerType.encoder:

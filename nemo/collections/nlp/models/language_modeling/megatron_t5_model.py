@@ -46,7 +46,7 @@ from nemo.collections.nlp.modules.common.megatron.module import Float16Module
 from nemo.collections.nlp.modules.common.megatron.utils import average_losses_across_data_parallel_group
 from nemo.collections.nlp.modules.common.tokenizer_utils import get_nmt_tokenizer
 from nemo.collections.nlp.parts.nlp_overrides import GradScaler
-from nemo.core.optim import MasterOptimizerWrapper, prepare_lr_scheduler
+from nemo.core.optim import MainParamsOptimizerWrapper, prepare_lr_scheduler
 from nemo.collections.nlp.parts.utils_funcs import get_last_rank, inject_model_parallel_rank
 from nemo.utils import AppState, logging
 
@@ -636,7 +636,7 @@ class MegatronT5Model(NLPModel):
             contiguous_grad_bucket = self.cfg.get('contiguous_grad_bucket', False)
             async_grad_allreduce = self.cfg.get('async_grad_allreduce', False)
 
-            self._optimizer = MasterOptimizerWrapper(
+            self._optimizer = MainParamsOptimizerWrapper(
                 self._optimizer,
                 fp32_grad_accum=fp32_grad_accum,
                 contiguous_grad_bucket=contiguous_grad_bucket,
