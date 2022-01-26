@@ -216,16 +216,16 @@ class MegatronGPTModel(NLPModel):
         else:
             loss_mean = torch.tensor(0.0).cuda()
 
-        # if self.megatron_amp_o2:
-        #     # main grads are stored in the MainParamsOptimizer wrapper
-        #     self._optimizer.allreduce_main_grads()
+        # TODO: if we're not using pipeline, then we should do async allreduce (better perf)
+        # in order to do this with O2, we need the async handler to be added to apex fwd/bwd function
+        if self.megatron_amp_o2:
+            # main grads are stored in the MainParamsOptimizer wrapper
+            self._optimizer.allreduce_main_grads()  # @sangkug we think this is fine
 
-        #     self.allreduce_first_last_embeddings()
-        # else:
+            self.allreduce_first_last_embeddings()
+        else:
 
-        # when using megatron_amp_o2 all-reduce is done in the MainParamsOptimizerWrapper
-        if not self.megatron_amp_o2:
-            self.allreduce_gradients()
+            self.allreduce_gradients()  # @sangkug we think this is causing memory to blow up (hurts perf)
 
             self.allreduce_first_last_embeddings()
 
@@ -340,7 +340,11 @@ class MegatronGPTModel(NLPModel):
         ):
             if self.model.share_word_embeddings:
                 word_embeddings_weight = self.model.word_embeddings_weight()
-                grad = word_embeddings_weight.grad
+                if self.megatron_amp_o2:
+                    # O2 recipe stores a "main" copy of weights and grads
+                    grad = word_embeddings_weight.main_grad
+                else:
+                    grad = word_embeddings_weight.grad
                 torch.distributed.all_reduce(grad, group=parallel_state.get_embedding_group())
 
     def get_forward_output_and_loss_func(self):
