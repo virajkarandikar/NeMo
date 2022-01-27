@@ -75,44 +75,25 @@ def ScalerMinMax(X, new_min=0.0, new_max=1.0):
     return v_p
 
 
-def _kmeans_plusplus_torch(X, n_clusters, random_state, n_local_trials=10):
-    device = 0
-    _X = X.cpu().numpy()
-    X = X.to(device)
-    np.random.seed(random_state)
+def kmeans_plusplus_torch(X, n_clusters, random_state, n_local_trials=10, device=0):
     torch.manual_seed(random_state)
-
-    
-    _x_squared_norms = row_norms(_X, squared=True)
+    X = X.to(device)
     x_squared_norms = torch.einsum("ij,ij->i", X, X)
-    
     n_samples, n_features = X.shape
-    _n_samples, _n_features = _X.shape
     
-    _centers = np.empty((n_clusters, _n_features), dtype=_X.dtype)
     centers = torch.zeros(n_clusters, n_features, dtype=X.dtype)
     # Set the number of local seeding trials if none is given
     # Pick first center randomly and track index of point
-    # center_id = random_state.randint(n_samples)
-    # center_id = np.random.randint(n_samples)
     center_id = torch.randint(0, n_samples, (1, )).item()
-
     indices = torch.full((n_clusters, ), -1, dtype=int)
-    _indices = np.full(n_clusters, -1, dtype=int)
     
     centers[0] = X[center_id]
-    _centers[0] = _X[center_id]
     indices[0] = center_id
-    _indices[0] = center_id
 
     centers = centers.to(device)
     # Initialize list of closest distances and calculate current potential
-    _closest_dist_sq = _euclidean_distances(
-        _centers[0, np.newaxis], _X, Y_norm_squared=_x_squared_norms, squared=True
-    )
     closest_dist_sq = (centers[0, None].repeat(1, X.shape[0]).view(X.shape[0],-1) - X).pow(2).sum(dim=1).unsqueeze(dim=0)
     current_pot = closest_dist_sq.sum()
-    _current_pot = _closest_dist_sq.sum()
 
     # Pick the remaining n_clusters-1 points
     for c in range(1, n_clusters):
@@ -120,38 +101,23 @@ def _kmeans_plusplus_torch(X, n_clusters, random_state, n_local_trials=10):
         # to the squared distance to the closest existing center
         # rand_vals = random_state.random_sample(n_local_trials) * current_pot
         rand_vals = torch.rand(n_local_trials) * current_pot.item()
-        _rand_vals = rand_vals.cpu().numpy()
 
-        _candidate_ids = np.searchsorted(stable_cumsum(_closest_dist_sq), _rand_vals)
-        try:
-            if len(closest_dist_sq.shape) > 1:
-                torch_cumsum = torch.cumsum(closest_dist_sq, dim=1)[0]
-            else:
-                torch_cumsum = torch.cumsum(closest_dist_sq, dim=0)
-                
-            candidate_ids = torch.searchsorted(torch_cumsum, rand_vals.to(device))
-        except:
-            import ipdb; ipdb.set_trace()
+        if len(closest_dist_sq.shape) > 1:
+            torch_cumsum = torch.cumsum(closest_dist_sq, dim=1)[0]
+        else:
+            torch_cumsum = torch.cumsum(closest_dist_sq, dim=0)
+            
+        candidate_ids = torch.searchsorted(torch_cumsum, rand_vals.to(device))
 
         # XXX: numerical imprecision can result in a candidate_id out of range
-        # np.clip(_candidate_ids, None, _closest_dist_sq.size - 1, out=_candidate_ids)
-        # candidate_ids = torch.clamp(candidate_ids, min=0, max=closest_dist_sq.shape[1]- 1, out=candidate_ids)
-        
-        
         # Compute distances to center candidates
-        _distance = _euclidean_distances(
-            _X[_candidate_ids], _X, Y_norm_squared=_x_squared_norms, squared=True
-        )
         N_ci = candidate_ids.shape[0]
         distance = (X[candidate_ids].repeat(1, X.shape[0]).view(X.shape[0]*N_ci,-1) - X.repeat(N_ci,1)).pow(2).sum(dim=1).view(N_ci, -1)
         # distance_to_candidates = torch.cdist(X[candidate_ids].to(0), X).pow(2)
 
 
         # update closest distances squared and potential for each candidate
-        _distance_to_candidates = np.minimum(_closest_dist_sq, _distance)
         distance_to_candidates = torch.minimum(closest_dist_sq, distance)
-
-        _candidates_pot = _distance_to_candidates.sum(axis=1)
         candidates_pot = distance_to_candidates.sum(dim=1)
 
         # Decide which candidate is the best
@@ -164,69 +130,7 @@ def _kmeans_plusplus_torch(X, n_clusters, random_state, n_local_trials=10):
         centers[c] = X[best_candidate]
         indices[c] = best_candidate
 
-        _best_candidate = np.argmin(_candidates_pot)
-        _current_pot = _candidates_pot[_best_candidate]
-        _closest_dist_sq = _distance_to_candidates[_best_candidate]
-        _best_candidate = _candidate_ids[_best_candidate]
-
-        _centers[c] = _X[_best_candidate]
-        _indices[c] = _best_candidate
-        # import ipdb; ipdb.set_trace()
-        
-
-    # return _centers, _indices
     return centers, indices
-
-
-def plus_plus(ds, k, random_state=0):
-    """
-    Create cluster centroids using the k-means++ algorithm.
-    Parameters
-    ----------
-    ds : numpy array
-        The dataset to be used for centroid initialization.
-    k : int
-        The desired number of clusters for which centroids are required.
-    Returnsrgmin_mat
-    -------
-    centroids : numpy array
-        Collection of k centroids as a numpy array.
-    Inspiration from here: https://stackoverflow.com/questions/5466323/how-could-one-implement-the-k-means-algorithm
-    """
-    np.random.seed(random_state)
-    centroids = [ds[0]]
-    fold = 8
-    for _ in range(1, k):
-        dist_sq = np.array([min([np.inner(c-x,c-x) for c in centroids]) for x in ds])
-        N_limit = max(1, np.shape(dist_sq)[0]//fold)
-        sorted_idx = np.argsort(dist_sq)[::-1][:N_limit]
-        _dist_sq = dist_sq[sorted_idx[:N_limit]]
-        probs = _dist_sq/_dist_sq.sum()
-        cumulative_probs = probs.cumsum()
-        r = np.random.rand()
-        index = np.argmax(_dist_sq) 
-        for j, p in enumerate(cumulative_probs):
-            if r < p:
-                index = j
-                break
-        i = sorted_idx[index]
-        # import ipdb; ipdb.set_trace()
-        centroids.append(ds[i])
-
-    return np.array(centroids)
-
-def initialize(X, num_clusters):
-    """
-    initialize cluster centers
-    :param X: (torch.tensor) matrix
-    :param num_clusters: (int) number of clusters
-    :return: (np.array) initial state
-    """
-    num_samples = len(X)
-    indices = np.random.choice(num_samples, num_clusters, replace=False)
-    initial_state = X[indices]
-    return initial_state
-
 
 def kmeans_torch(
         X,
@@ -254,25 +158,24 @@ def kmeans_torch(
     if tqdm_flag:
         print(f'running k-means on {device}..')
 
-    pairwise_distance_function = partial(pairwise_distance, device=device, tqdm_flag=tqdm_flag)
+    pairwise_distance_function = partial(getEuclideanDistance, device=device, tqdm_flag=tqdm_flag)
     # convert to float
     X = X.float()
 
     # transfer to device
     X = X.to(device)
 
-    init_state = _kmeans_plusplus_torch(X, n_clusters=num_clusters, random_state=0)
+    init_state = kmeans_plusplus_torch(X, n_clusters=num_clusters, random_state=0, device=device)
     initial_state = init_state[0]
     
     iter_count = 0
     while True:
-
-        dis = pairwise_distance_function(X, initial_state)
-        choice_cluster = torch.argmin(dis, dim=1)
+        euc_dist = pairwise_distance_function(X, initial_state)
+        selected_cluster_index = torch.argmin(euc_dist, dim=1)
         initial_state_pre = initial_state.clone()
 
         for index in range(num_clusters):
-            selected = torch.nonzero(choice_cluster == index).squeeze().to(device)
+            selected = torch.nonzero(selected_cluster_index == index).squeeze().to(device)
             selected = torch.index_select(X, 0, selected)
 
             if selected.shape[0] == 0:
@@ -292,14 +195,10 @@ def kmeans_torch(
         if iter_limit != 0 and iter_count >= iter_limit:
             break
 
-    return choice_cluster.cpu(), initial_state.cpu()
+    return selected_cluster_index.cpu(), initial_state.cpu()
 
-def pairwise_distance(data1, data2, device=torch.device('cpu'), tqdm_flag=True):
-    if tqdm_flag:
-        print(f'device is :{device}')
-    # transfer to device
+def getEuclideanDistance(data1, data2, device=torch.device('cpu'), tqdm_flag=True):
     data1, data2 = data1.to(device), data2.to(device)
-
     A = data1.unsqueeze(dim=1)
     B = data2.unsqueeze(dim=0)
     dis = (A - B) ** 2.0
@@ -339,7 +238,6 @@ def _getKneighborsConnections(affinity_mat, p_value):
     """
     Binarize top-p values for each row from the given affinity matrix.
     """
-    # binarized_affinity_mat = np.zeros_like(affinity_mat)
     binarized_affinity_mat = torch.zeros_like(affinity_mat)
     # for i, line in enumerate(affinity_mat):
     for i in range(affinity_mat.shape[0]):
@@ -375,7 +273,7 @@ def _getMinimumConnection(mat, max_N, n_list):
 
     return affinity_mat, p_value
 
-def getRepeatedList(mapping_argmat, score_mat_size):
+def _getRepeatedList(mapping_argmat, score_mat_size):
     """
     Count the numbers in the mapping dictionary and create lists that contain
     repeated indices to be used for creating the repeated affinity matrix for
@@ -415,13 +313,12 @@ def _get_argmin_mat(uniq_scale_dict):
         curr_scale_anchor = segment_anchor_dict[scale_idx]
         curr_mat = torch.tile(curr_scale_anchor, (base_scale_anchor.shape[0], 1))
         base_mat = torch.tile(base_scale_anchor, (curr_scale_anchor.shape[0], 1)).t()
-        # argmin_mat = np.argmin(np.abs(curr_mat - base_mat), axis=1)
         argmin_mat = torch.argmin(torch.abs(curr_mat - base_mat), dim=1)
         session_scale_mapping_dict[scale_idx] = argmin_mat
 
     return session_scale_mapping_dict
 
-def getMultiScaleCosAffinityMatrix(uniq_embs_and_timestamps):
+def _getMultiScaleCosAffinityMatrix(uniq_embs_and_timestamps):
     """
     Calculate cosine similarity values among speaker embeddings for each scale then
     apply multiscale weights to calculate the fused similarity matrix.
@@ -441,7 +338,6 @@ def getMultiScaleCosAffinityMatrix(uniq_embs_and_timestamps):
     """
     uniq_scale_dict = uniq_embs_and_timestamps['scale_dict']
     base_scale_idx = max(uniq_scale_dict.keys())
-    # base_scale_emb = np.array(uniq_scale_dict[base_scale_idx]['embeddings'])
     base_scale_emb = torch.from_numpy(np.array(uniq_scale_dict[base_scale_idx]['embeddings']))
     multiscale_weights = uniq_embs_and_timestamps['multiscale_weights']
     _multiscale_weights = torch.tensor(multiscale_weights).unsqueeze(0).half()
@@ -451,34 +347,16 @@ def getMultiScaleCosAffinityMatrix(uniq_embs_and_timestamps):
     session_scale_mapping_dict = _get_argmin_mat(uniq_scale_dict)
     for scale_idx in sorted(uniq_scale_dict.keys()):
         mapping_argmat = session_scale_mapping_dict[scale_idx]
-        _emb = torch.from_numpy(np.array(  uniq_scale_dict[scale_idx]['embeddings'] ) )
-        emb = np.array(uniq_scale_dict[scale_idx]['embeddings'] ) 
         score_mat_torch = _getCosAffinityMatrix(uniq_scale_dict[scale_idx]['embeddings'])
-        _score_mat = score_mat_torch.cpu().numpy()
-        score_mat = _score_mat
-        # score_mat_skl = getCosAffinityMatrix(uniq_scale_dict[scale_idx]['embeddings'])
-        # score_mat = score_mat_skl
-        # print(score_mat[:6,0])
-        # print(_score_mat[:6,0])
-        # import ipdb; ipdb.set_trace()
-        # score_mat_list.append(score_mat)
-        repeat_list = getRepeatedList(mapping_argmat, score_mat.shape[0])
-        # repeated_mat_dim0 = torch.repeat_interleave(score_mat, repeat_list, dim=0)
-        # repeated_mat = torch.repeat_interleave(repeated_mat_dim0, repeat_list, dim=1)
-        # repeated_mat = repeated_mat.cpu().numpy()
-        repeated_mat = np.repeat(np.repeat(score_mat, repeat_list, axis=0), repeat_list, axis=1)
-        # repeated_tensor_0 = torch.repeat_interleave(score_mat_torch, repeats=torch.tensor(repeat_list), dim=0)
-        # repeated_tensor_1 = torch.repeat_interleave(repeated_tensor_0, repeats=torch.tensor(repeat_list), dim=1)
+        score_mat = score_mat_torch
+        repeat_list = _getRepeatedList(mapping_argmat, score_mat.shape[0])
         repeated_tensor_0 = torch.repeat_interleave(score_mat_torch, repeats=repeat_list, dim=0)
         repeated_tensor_1 = torch.repeat_interleave(repeated_tensor_0, repeats=repeat_list, dim=1)
         repeated_tensor_list.append(repeated_tensor_1)
         repeated_mat_list.append(repeated_mat)
     repp = torch.stack(repeated_tensor_list)
-    # fused_sim_d = np.average(np.array(repeated_mat_list), weights=multiscale_weights, axis=0)
     
-    # import ipdb; ipdb.set_trace()
     _fused_sim_d = torch.matmul(repp.permute(2,1,0), _multiscale_weights.t()).squeeze(2).t()
-    fused_sim_d = _fused_sim_d.cpu().numpy()
     return _fused_sim_d, base_scale_emb
 
 def _addAnchorEmb(emb, anchor_sample_n, anchor_spk_n, sigma):
@@ -539,7 +417,7 @@ def _getEnhancedSpeakerCount(emb, cuda, random_test_count=5, anchor_spk_n=3, anc
             NME_mat_size=300,
             cuda=cuda,
         )
-        est_num_of_spk, _ = nmesc.NMEanalysis()
+        est_num_of_spk, _ = nmesc._NMEanalysis()
         # est_num_of_spk_list.append(est_num_of_spk)
         est_num_of_spk_list[idx] = est_num_of_spk
 
@@ -551,17 +429,8 @@ def _getCosAffinityMatrix(emb):
     """
     Calculate cosine similarity values among speaker embeddings.
     """
-    if type(emb) == list:
-        _emb = torch.from_numpy(np.array(emb))
-    elif type(emb) == np.ndarray:
-        _emb = torch.from_numpy(emb).to(DEVICE)
-    else:
-        _emb = emb
-
-    # sim_d = sim_matrix(_emb, _emb)
-    sim_d = cos_similarity(_emb, _emb)
+    sim_d = cos_similarity(emb, emb)
     sim_d = ScalerMinMax(sim_d)
-    # import ipdb; ipdb.set_trace()
     return sim_d
 
 def _getLaplacian(X):
@@ -610,7 +479,6 @@ def _estimateNumofSpeakers(affinity_mat, max_num_speaker, is_cuda=False):
     lambdas = torch.sort(lambdas)[0]
 
     lambda_gap_tensor = _getLamdaGaplist(lambdas)
-    # num_of_spk = np.argmax(lambda_gap_tensor[: min(max_num_speaker, len(lambda_gap_tensor))]) + 1
     num_of_spk = torch.argmax(lambda_gap_tensor[: min(max_num_speaker, lambda_gap_tensor.shape[0])]) + 1
     return num_of_spk, lambdas, lambda_gap_tensor
 
@@ -631,10 +499,10 @@ class _SpectralClustering:
             raise ValueError("The affinity matrix is not a square matrix.")
 
         self.affinity_matrix_ = X
-        labels = self.clusterSpectralEmbeddings(self.affinity_matrix_, n_init=self.n_init, cuda=self.cuda)
+        labels = self._clusterSpectralEmbeddings(self.affinity_matrix_, n_init=self.n_init, cuda=self.cuda)
         return labels
 
-    def clusterSpectralEmbeddings(self, affinity, n_init=10, cuda=False):
+    def _clusterSpectralEmbeddings(self, affinity, n_init=10, cuda=False):
         spectral_emb = self._getSpectralEmbeddings(affinity, n_spks=self.n_clusters, drop_first=False, cuda=cuda)
         labels, _ = kmeans_torch(
                     X=spectral_emb, num_clusters=self.n_clusters, distance='euclidean', device=torch.device('cuda:0')
@@ -673,7 +541,7 @@ class NMESC:
         Please refer to def __init__()
 
     Methods:
-        NMEanalysis():
+        _NMEanalysis():
             Performs NME-analysis to estimate p_value and the number of speakers.
 
         subsampleAffinityMat(NME_mat_size):
@@ -758,7 +626,7 @@ class NMESC:
         self.mat = mat
         self.p_value_list = []
 
-    def NMEanalysis(self):
+    def _NMEanalysis(self):
         """
         Subsample the input matrix to reduce the computational load.
         """
@@ -783,7 +651,6 @@ class NMESC:
         if not _isGraphFullyConnected(affinity_mat):
             affinity_mat, rp_p_value = _getMinimumConnection(self.mat, self.max_N, self.p_value_list)
 
-        # p_hat_value = int(subsample_ratio * rp_p_value)
         p_hat_value = (subsample_ratio * rp_p_value.item()).type(torch.int)
         est_num_of_spk = est_spk_n_dict[rp_p_value.item()]
         return est_num_of_spk, p_hat_value
@@ -811,7 +678,6 @@ class NMESC:
 
         """
         # subsample_ratio = int(max(1, self.mat.shape[0] / NME_mat_size))
-        # self.mat = self.mat[::subsample_ratio, ::subsample_ratio]
         subsample_ratio = torch.max(torch.tensor(1), torch.tensor(self.mat.shape[0] / NME_mat_size)).type(torch.int)
         self.mat = self.mat[::subsample_ratio.item(), ::subsample_ratio.item()]
         return subsample_ratio
@@ -852,15 +718,11 @@ class NMESC:
             p_value_list = [torch.floor(torch.tensor(self.mat.shape[0] * self.fixed_thres)).type(torch.int)]
             self.max_N = p_value_list[0]
         else:
-            # self.max_N = int(self.mat.shape[0] * self.max_rp_threshold)
             self.max_N = torch.floor(torch.tensor(self.mat.shape[0] * self.max_rp_threshold)).type(torch.int)
             if self.sparse_search:
-                # N = min(self.max_N, self.sparse_search_volume)
-                # p_value_list = list(np.linspace(1, self.max_N, N, endpoint=True).astype(int))
                 N = torch.min(self.max_N, torch.tensor(self.sparse_search_volume).type(torch.int))
                 p_value_list = torch.linspace(start=1, end=self.max_N, steps=N).type(torch.int)
             else:
-                # p_value_list = list(range(1, self.max_N))
                 p_value_list = torch.arange(1, self.max_N)
 
         return p_value_list
@@ -940,7 +802,7 @@ def COSclustering(
     if oracle_num_speakers:
         max_num_speaker = oracle_num_speakers
 
-    mat, emb = getMultiScaleCosAffinityMatrix(uniq_embs_and_timestamps)
+    mat, emb = _getMultiScaleCosAffinityMatrix(uniq_embs_and_timestamps)
 
     nmesc = NMESC(
         mat,
@@ -954,7 +816,7 @@ def COSclustering(
     )
 
     if emb.shape[0] > min_samples_for_NMESC:
-        est_num_of_spk, p_hat_value = nmesc.NMEanalysis()
+        est_num_of_spk, p_hat_value = nmesc._NMEanalysis()
         affinity_mat = _getAffinityGraphMat(mat, p_hat_value)
     else:
         affinity_mat = mat
