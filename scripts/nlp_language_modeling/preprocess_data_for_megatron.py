@@ -165,6 +165,7 @@ def get_args():
 
 
 def main():
+    overall_start = time.time()
     args = get_args()
     startup_start = time.time()
     if args.preproc_folder:
@@ -244,6 +245,8 @@ def main():
     for key in args.json_keys:
         builders[key].finalize(output_idx_files[key])
 
+    overall_end = time.time()
+    print(f"Total time: {overall_end - overall_start}")
 
 if __name__ == '__main__':
     main()

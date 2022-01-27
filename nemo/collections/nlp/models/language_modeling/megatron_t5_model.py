@@ -73,6 +73,7 @@ class MegatronT5Model(NLPModel):
             global_batch_size=cfg.get('global_batch_size'),
             seed=self.cfg.get('seed', 1234),
             apex_transformer_log_level=self.cfg.get('apex_transformer_log_level', 30),
+            pipeline_model_parallel_split_rank=cfg.get('pipeline_model_parallel_split_rank', None),
         )
 
         set_jit_fusion_options()
