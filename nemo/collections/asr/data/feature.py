@@ -43,7 +43,7 @@ class FeatureDataset(Dataset):
     """
 
     def __init__(
-        self, *, manifest_filepath: str, embedding_file_path: str
+        self, *, manifest_filepath: str, embedding_file_path: Optional[str]=None
     ):
         super().__init__()
 

@@ -32,8 +32,25 @@ model:
   ctc_reduction: 'mean_batch'
 
   train_ds:
+    augmentor:
+      rir_noise_aug:
+        prob: 0.8
+        rir_manifest_path: ???
+        rir_tar_filepaths: None
+        rir_prob: 0.8
+        noise_manifest_paths: ???
+        min_snr_db: [0]
+        max_snr_db: [50]
+        noise_tar_filepaths: None
+        apply_noise_rir: True
+        max_additions: 1
+        max_duration: 2.0
+        bg_min_snr_db: [10]
+        bg_max_snr_db: [50]
+        bg_noise_manifest_paths: ???
+        bg_noise_tar_filepaths: None
     manifest_filepath: ???
-    embedding_filepath: ???
+    embedding_filepath: None
     sample_rate: ${model.sample_rate}
     batch_size: 16 # you may increase batch_size if your memory allows
     shuffle: true
