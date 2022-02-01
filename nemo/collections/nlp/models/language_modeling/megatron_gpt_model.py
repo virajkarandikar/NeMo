@@ -183,8 +183,13 @@ class MegatronGPTModel(NLPModel):
         # we zero grads here because we also call backward in the apex fwd/bwd functions
         self._optimizer.zero_grad()
 
-        # we prepare the micro batches for the apex fwd/bwd function
-        batch_for_pipeline = self.process_global_batch(batch)
+        if self.use_soft_prompts:
+            # The micro batches are already prepared for apex by the prompt tuning dataclass
+            batch_for_pipeline = batch
+        else:
+            # we prepare the micro batches for the apex fwd/bwd function
+            batch_for_pipeline = self.process_global_batch(batch)
+
         tensor_shape = [self.cfg.encoder_seq_length, self.cfg.micro_batch_size, self.cfg.hidden_size]
 
         if self.cfg.get('pipeline_model_parallel_size', 1) > 1:
@@ -347,9 +352,16 @@ class MegatronGPTModel(NLPModel):
 
     def get_forward_output_and_loss_func(self):
         def fwd_output_and_loss_func(batch, model):
-            tokens, labels, loss_mask, attention_mask, position_ids = batch
+            has_prompt_tag_len = 6 # Batch len when batch has prompt tags
+
+            if len(batch) == has_prompt_tag_len:
+                tokens, labels, loss_mask, attention_mask, position_ids, prompt_tags = batch
+            else:
+                tokens, labels, loss_mask, attention_mask, position_ids = batch
+                prompt_tags = None
+
             attention_mask = attention_mask[0:1]
-            output_tensor = model(tokens, position_ids, attention_mask, labels)
+            output_tensor = model(tokens, position_ids, attention_mask, labels, prompt_tags=prompt_tags)
 
             def loss_func(output_tensor):
                 loss = self.loss_func(loss_mask, output_tensor)
