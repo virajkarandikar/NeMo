@@ -149,6 +149,155 @@ class ASRBPEMixin(ABC):
             )
         )
 
+class ASRAGGBPEMixin(ABC):
+    """ ASR AGGREGATE BPE Mixin class that sets up aggregate Tokenizer via a config
+
+    This mixin class adds the method `_setup_tokenizer(...)`, which can be used by ASR models
+    which depend on subword tokenization.
+
+
+    The method will instantiate and preserve an aggregate tokenizer
+    (subclass of TokenizerSpec) if successful, and assign it to self.tokenizer.
+    """
+
+    def _setup_tokenizer(self, tokenizer_cfg: DictConfig):
+        # Prevent tokenizer parallelism (unless user has explicitly set it)
+        if 'TOKENIZERS_PARALLELISM' not in os.environ:
+            os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
+        if tokenizer_cfg['type'] is None:
+            logging.warning("Tokenizer is null, so you will need to set it up later")
+            # for compatibility purposes only
+#             dummy_vocab = []
+#             self.tokenizer = DummyTokenizer(dummy_vocab)
+            self.tokenizer = None
+            return
+
+        elif tokenizer_cfg['type'] == 'agg':
+          logging.debug("_setup_tokenizer: detected an aggregate tokenizer")
+          tokenizers_dict = {}
+          tok_size = tokenizer_cfg.size
+          for i in range(tok_size):
+              tokenizer_name = 'tokenizer_' + str(i)
+              c = tokenizer_cfg[tokenizer_name]
+              tokenizer = self._make_tokenizer('tokenizer.' + tokenizer_name, c)
+              tokenizers_dict[c.lang] = tokenizer
+
+          self.tokenizer = tokenizers.AggregateTokenizer(tokenizers_dict)
+        else:
+          logging.debug("_setup_tokenizer: detected a regular tokenizer")
+          # passing None because non-aggregate tokenizers are transient and ought not to be registered / saved
+          self.tokenizer = self._make_tokenizer(None, tokenizer_cfg)
+
+    def _make_tokenizer(self, tokenizer_name: str, tokenizer_cfg: DictConfig):
+
+        if tokenizer_cfg.type not in ['bpe', 'wpe']:
+            raise ValueError(
+                "`tokenizer.type` must be either `bpe` for SentencePiece tokenizer or "
+                "`wpe` for BERT based tokenizer"
+            )
+
+        ## hf_tokenizer_kwargs = tokenizer_cfg.pop("hf_kwargs", {})  # Remove HF tokenizer kwargs
+        ## replacing a pop with get
+        hf_tokenizer_kwargs = tokenizer_cfg.get("hf_kwargs", {})
+
+
+        if tokenizer_cfg.type == 'bpe':
+            # This is a BPE Tokenizer
+            if 'model_path' in tokenizer_cfg:
+                model_path = tokenizer_cfg.get('model_path')
+            else:
+                model_path = os.path.join(tokenizer_cfg.dir, 'tokenizer.model')
+
+            if tokenizer_name is not None:
+                model_path = self.register_artifact(tokenizer_name + '.model_path', model_path)
+            ## self.model_path = model_path
+
+            if 'special_tokens' in tokenizer_cfg:
+                special_tokens = tokenizer_cfg['special_tokens']
+
+                if special_tokens is not None:
+                    raise ValueError("`special_tokens` are no longer supported for SentencePiece based tokenizers.")
+
+            # Update special tokens
+            tokenizer = tokenizers.SentencePieceTokenizer(model_path=model_path)
+            # print("created sentencepiece tokenizer; dict size: " + str(len(tokenizer.vocab)))
+            # print("type of tokenizer.vocab: " + str(type(tokenizer.vocab)))
+            # print("----here comes tokenizer.vocab")
+            # print(tokenizer.vocab)
+            # print("----end of tokenizer.vocab")
+
+            if 'vocab_path' in tokenizer_cfg:
+                vocab_path = tokenizer_cfg.get('vocab_path')
+            else:
+                vocab_path = os.path.join(tokenizer_cfg.dir, 'vocab.txt')
+
+            if tokenizer_name is not None:
+                vocab_path = self.register_artifact(tokenizer_name + '.vocab_path', vocab_path)
+            ##self.vocab_path = vocab_path
+
+            try:
+                if 'spe_tokenizer_vocab' in tokenizer_cfg:
+                    spe_vocab_path = tokenizer_cfg.get('spe_tokenizer_vocab')
+                else:
+                    spe_vocab_path = os.path.join(tokenizer_cfg.dir, 'tokenizer.vocab')
+
+                if tokenizer_name is not None:
+                    spe_vocab_path = self.register_artifact(tokenizer_name + '.spe_tokenizer_vocab', spe_vocab_path)
+                ## self.spe_vocab_path = spe_vocab_path
+            except FileNotFoundError:
+                # fallback case for older checkpoints that did not preserve the tokenizer.vocab
+
+                # not sure we need this..
+                # self.spe_vocab_path = None
+                spe_vocab_path = None
+                pass
+
+            vocabulary = {}
+            for i in range(tokenizer.vocab_size):
+                piece = tokenizer.ids_to_tokens([i])
+                piece = piece[0]
+                vocabulary[piece] = i + 1
+
+            # wrapper method to get vocabulary conveniently
+            def get_vocab():
+                return vocabulary
+
+            # attach utility values to the tokenizer wrapper
+            tokenizer.tokenizer.vocab_size = len(vocabulary)
+            tokenizer.tokenizer.get_vocab = get_vocab
+            tokenizer.tokenizer.all_special_tokens = tokenizer.special_token_to_id
+
+        else:
+            # This is a WPE Tokenizer
+            # If path from previous registration exists, remove it
+            if 'vocab_path' in tokenizer_cfg:
+                vocab_path = tokenizer_cfg.get('vocab_path')
+            else:
+                vocab_path = os.path.join(tokenizer_cfg.dir, 'vocab.txt')
+            ## vocab_path = self.register_artifact('tokenizer.vocab_path', vocab_path)
+            ## self.vocab_path = vocab_path
+
+            # If path from previous registration exists, remove it
+            ## if 'vocab_path' in self.tokenizer_cfg:
+            ##     self.tokenizer_cfg.pop('vocab_path')
+
+            tokenizer = tokenizers.AutoTokenizer(
+                pretrained_model_name='bert-base-cased',
+                vocab_file=vocab_path,
+                mask_token=hf_tokenizer_kwargs.get('mask_token', None),
+                bos_token=hf_tokenizer_kwargs.get('bos_token', None),
+                eos_token=hf_tokenizer_kwargs.get('eos_token', None),
+                pad_token=hf_tokenizer_kwargs.get('pad_token', None),
+                sep_token=hf_tokenizer_kwargs.get('sep_token', None),
+                cls_token=hf_tokenizer_kwargs.get('cls_token', None),
+                unk_token=hf_tokenizer_kwargs.get('unk_token', None),
+                use_fast=hf_tokenizer_kwargs.get('use_fast', False),
+            )
+
+        return tokenizer
+     
+
 
 class ASRModuleMixin(ABC):
     """
