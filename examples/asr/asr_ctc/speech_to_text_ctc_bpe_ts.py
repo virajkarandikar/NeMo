@@ -68,6 +68,7 @@ import torch
 from omegaconf import OmegaConf
 
 from nemo.collections.asr.models.ctc_bpe_ts_models import TSEncDecCTCModelBPE
+from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
@@ -84,7 +85,7 @@ def main(cfg):
     # Initialize the weights of the model from another model, if provided via config
     # asr_model.maybe_init_from_pretrained_checkpoint(cfg)
 
-    checkpoint = TSEncDecCTCModelBPE.restore_from(cfg.nemo_checkpoint_path, map_location=torch.device('cpu'), strict=False)
+    checkpoint = EncDecCTCModelBPE.restore_from(cfg.nemo_checkpoint_path, map_location=torch.device('cpu'), strict=False)
     asr_model.load_state_dict(checkpoint.state_dict(), strict=False)
     del checkpoint
 

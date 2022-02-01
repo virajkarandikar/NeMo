@@ -20,6 +20,7 @@ from nemo.collections.asr.parts.preprocessing.features import (
     STFTExactPad,
     STFTPatch,
     WaveformFeaturizer,
+    WaveformFeaturizerAndEmbedding
 )
 from nemo.collections.asr.parts.preprocessing.perturb import (
     AudioAugmentor,

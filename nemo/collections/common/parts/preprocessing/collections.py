@@ -109,6 +109,7 @@ class AudioText(_Collection):
         max_number: Optional[int] = None,
         do_sort_by_duration: bool = False,
         index_by_file_id: bool = False,
+        index_by_speaker_id: bool = False,
     ):
         """Instantiates audio-text manifest with filters and preprocessing.
 
@@ -126,12 +127,15 @@ class AudioText(_Collection):
             max_number: Maximum number of samples to collect.
             do_sort_by_duration: True if sort samples list by duration. Not compatible with index_by_file_id.
             index_by_file_id: If True, saves a mapping from filename base (ID) to index in data.
+            index_by_speaker_id: If True, saves a mapping from speaker id to index in data.
         """
 
         output_type = self.OUTPUT_TYPE
         data, duration_filtered, num_filtered, total_duration = [], 0.0, 0, 0.0
         if index_by_file_id:
             self.mapping = {}
+        if index_by_speaker_id:
+            self.speaker_mapping = {}
 
         for id_, audio_file, duration, offset, text, speaker, orig_sr in zip(
             ids, audio_files, durations, offsets, texts, speakers, orig_sampling_rates
@@ -159,14 +163,18 @@ class AudioText(_Collection):
             if index_by_file_id:
                 file_id, _ = os.path.splitext(os.path.basename(audio_file))
                 self.mapping[file_id] = len(data) - 1
+            if index_by_speaker_id:
+                if speaker not in self.speaker_mapping:
+                    self.speaker_mapping[speaker] = []
+                self.speaker_mapping[speaker].append(len(data) - 1)
 
             # Max number of entities filter.
             if len(data) == max_number:
                 break
 
         if do_sort_by_duration:
-            if index_by_file_id:
-                logging.warning("Tried to sort dataset by duration, but cannot since index_by_file_id is set.")
+            if index_by_file_id or index_by_speaker_id:
+                logging.warning("Tried to sort dataset by duration, but cannot since index_by_file_id or index_by_speaker_id is set.")
             else:
                 data.sort(key=lambda entity: entity.duration)
 

@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import copy
+from copyreg import dispatch_table
 import os
 from typing import Dict, Optional
 
@@ -26,6 +27,7 @@ from nemo.collections.asr.metrics.wer_bpe import WERBPE
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
 from nemo.collections.asr.data import feature
 from nemo.core.neural_types import AudioSignal, LabelsType, LengthsType, LogprobsType, NeuralType, SpectrogramType, AcousticEncodedRepresentation
+from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
 from nemo.collections.asr.parts.preprocessing.perturb import process_augmentations
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
 from nemo.utils import logging, model_utils
@@ -38,7 +40,10 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
 
     def __init__(self,  *args, **kwargs,):
         super().__init__(*args, **kwargs)
-        self.f1 = torch.nn.Linear(192, 512)
+        self.f1 = torch.nn.Linear(self._cfg.speaker_embeddings.feature_dim, self._cfg.encoder.d_model)
+        self.speaker_model=None
+        if self._cfg.speaker_embeddings.model_path:
+            self.speaker_model = EncDecSpeakerLabelModel.from_pretrained(self._cfg.speaker_embeddings.model_path)
 
     @classmethod
     def list_available_models(cls) -> Optional[PretrainedModelInfo]:
@@ -53,13 +58,14 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
     @property
     def input_types(self) -> Optional[Dict[str, NeuralType]]:
         d = super().input_types
-        d.pop("sample_id")
-        d["embeddings"] = NeuralType(('B', 'T'), AcousticEncodedRepresentation())
+        d["speaker_embedding"] = NeuralType(('B', 'T'), AudioSignal())
+        d['embedding_lengths'] = NeuralType(tuple('B'), LengthsType())
+        d["sample_id"] = d.pop("sample_id")
         return d
 
     @typecheck()
     def forward(
-        self, input_signal=None, input_signal_length=None, processed_signal=None, processed_signal_length=None, embeddings=None
+        self, input_signal=None, input_signal_length=None, processed_signal=None, processed_signal_length=None, speaker_embedding=None, embedding_lengths=None
     ):
         """
         Forward pass of the model.
@@ -98,21 +104,26 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
             processed_signal = self.spec_augmentation(input_spec=processed_signal, length=processed_signal_length)
 
         encoded, encoded_len = self.encoder(audio_signal=processed_signal, length=processed_signal_length)
-        embeddings = self.f1(embeddings).unsqueeze(-1).repeat(1, 1, encoded.shape[2])
-        encoded += embeddings
+        if self.speaker_model:
+            with torch.no_grad():
+                self.speaker_model.eval()
+                _, speaker_embedding = self.speaker_model.forward(input_signal=speaker_embedding, input_signal_length=embedding_lengths)
+                speaker_embedding = speaker_embedding.detach()
+        speaker_embedding = self.f1(speaker_embedding).unsqueeze(-1).repeat(1, 1, encoded.shape[2])
+        encoded += speaker_embedding
         log_probs = self.decoder(encoder_output=encoded)
         greedy_predictions = log_probs.argmax(dim=-1, keepdim=False)
 
         return log_probs, encoded_len, greedy_predictions
 
     def training_step(self, batch, batch_nb):
-        signal, signal_len, transcript, transcript_len, embeddings = batch
+        signal, signal_len, transcript, transcript_len, speaker_embedding, embedding_lengths = batch
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
-                processed_signal=signal, processed_signal_length=signal_len, embeddings=embeddings
+                processed_signal=signal, processed_signal_length=signal_len, speaker_embedding=speaker_embedding
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, embeddings=embeddings)
+            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, speaker_embedding=speaker_embedding, embedding_lengths=embedding_lengths)
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
@@ -140,13 +151,13 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
 
 
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
-        signal, signal_len, transcript, transcript_len, embeddings = batch
+        signal, signal_len, transcript, transcript_len, speaker_embedding, embedding_lengths = batch
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
             log_probs, encoded_len, predictions = self.forward(
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, embeddings=embeddings)
+            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, speaker_embedding=speaker_embedding, embedding_lengths=embedding_lengths)
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
@@ -210,17 +221,10 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
             if 'manifest_filepath' in config and config['manifest_filepath'] is None:
                 logging.warning(f"Could not load dataset as `manifest_filepath` was None. Provided config : {config}")
                 return None
-
-            dataset = audio_to_text_dataset.get_bpe_dataset(
+            
+            dataset = audio_to_text_dataset.get_audio_embedding_bpe_dataset(
                 config=config, tokenizer=self.tokenizer, augmentor=augmentor
             )
-
-            embedding_dataset =  feature.FeatureDataset(
-                    manifest_filepath=config['manifest_filepath'],
-                    embedding_file_path=config['embedding_filepath']
-                )
-            assert(len(dataset) == len(embedding_dataset))
-            dataset = feature.ZipDataset(dataset, embedding_dataset)
         
         loader = torch.utils.data.DataLoader(
             dataset=dataset,

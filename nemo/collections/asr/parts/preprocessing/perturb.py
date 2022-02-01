@@ -456,13 +456,13 @@ class NoisePerturbation(Perturbation):
             data._samples += noise._samples
 
     def perturb_with_foreground_noise(
-        self, data, noise, data_rms=None, max_noise_dur=2, max_additions=1,
+        self, data, noise, data_rms=None, max_noise_dur=2, max_additions=1, max_gain_db=None
     ):
         snr_db = self._rng.uniform(self._min_snr_db, self._max_snr_db)
         if not data_rms:
             data_rms = data.rms_db
 
-        noise_gain_db = min(data_rms - noise.rms_db - snr_db, self._max_gain_db)
+        noise_gain_db = min(data_rms - noise.rms_db - snr_db, self._max_gain_db if max_gain_db is None else max_gain_db)
         n_additions = self._rng.randint(1, max_additions)
 
         for i in range(n_additions):
@@ -623,6 +623,142 @@ class RirAndNoisePerturbation(Perturbation):
         bg_perturber.perturb_with_input_noise(data, noise, data_rms=data_rms)
 
 
+
+
+
+
+class RirNoiseSpeakerPerturbation(Perturbation):
+    """
+        RIR augmentation with additive foreground and background noise.
+        In this implementation audio data is augmented by first convolving the audio with a Room Impulse Response
+        and then adding foreground noise and background noise at various SNRs. RIR, foreground and background noises
+        should either be supplied with a manifest file or as tarred audio files (faster).
+
+        Different sets of noise audio files based on the original sampling rate of the noise. This is useful while
+        training a mixed sample rate model. For example, when training a mixed model with 8 kHz and 16 kHz audio with a
+        target sampling rate of 16 kHz, one would want to augment 8 kHz data with 8 kHz noise rather than 16 kHz noise.
+
+        Args:
+            rir_manifest_path: Manifest file for RIRs
+            rir_tar_filepaths: Tar files, if RIR audio files are tarred
+            rir_prob: Probability of applying a RIR
+            noise_manifest_paths: Foreground noise manifest path
+            min_snr_db: Min SNR for foreground noise
+            max_snr_db: Max SNR for background noise,
+            noise_tar_filepaths: Tar files, if noise files are tarred
+            apply_noise_rir: Whether to convolve foreground noise with a a random RIR
+            orig_sample_rate: Original sampling rate of foreground noise audio
+            max_additions: Max number of times foreground noise is added to an utterance,
+            max_duration: Max duration of foreground noise
+            bg_noise_manifest_paths: Background noise manifest path
+            bg_min_snr_db: Min SNR for background noise
+            bg_max_snr_db: Max SNR for background noise
+            bg_noise_tar_filepaths: Tar files, if noise files are tarred
+            bg_orig_sample_rate: Original sampling rate of background noise audio
+
+    """
+
+    def __init__(
+        self,
+        rir_manifest_path=None,
+        rir_prob=0.5,
+        noise_manifest_paths=None,
+        min_snr_db=0,
+        max_snr_db=50,
+        rir_tar_filepaths=None,
+        rir_shuffle_n=100,
+        noise_tar_filepaths=None,
+        apply_noise_rir=False,
+        orig_sample_rate=None,
+        max_additions=5,
+        max_duration=2.0,
+        bg_noise_manifest_paths=None,
+        bg_min_snr_db=10,
+        bg_max_snr_db=50,
+        bg_noise_tar_filepaths=None,
+        bg_orig_sample_rate=None,
+    ):
+
+        logging.info("Called Rir aug init")
+        self._rir_prob = rir_prob
+        self._rng = random.Random()
+        self._rir_perturber = ImpulsePerturbation(
+            manifest_path=rir_manifest_path,
+            audio_tar_filepaths=rir_tar_filepaths,
+            shuffle_n=rir_shuffle_n,
+            shift_impulse=True,
+        )
+        self._fg_noise_perturbers = {}
+        self._bg_noise_perturbers = {}
+        if noise_manifest_paths:
+            for i in range(len(noise_manifest_paths)):
+                if orig_sample_rate is None:
+                    orig_sr = 16000
+                else:
+                    orig_sr = orig_sample_rate[i]
+                self._fg_noise_perturbers[orig_sr] = NoisePerturbation(
+                    manifest_path=noise_manifest_paths[i],
+                    min_snr_db=min_snr_db[i],
+                    max_snr_db=max_snr_db[i],
+                    audio_tar_filepaths=noise_tar_filepaths[i],
+                    orig_sr=orig_sr,
+                )
+        self._max_additions = max_additions
+        self._max_duration = max_duration
+        if bg_noise_manifest_paths:
+            for i in range(len(bg_noise_manifest_paths)):
+                if bg_orig_sample_rate is None:
+                    orig_sr = 16000
+                else:
+                    orig_sr = bg_orig_sample_rate[i]
+                self._bg_noise_perturbers[orig_sr] = NoisePerturbation(
+                    manifest_path=bg_noise_manifest_paths[i],
+                    min_snr_db=bg_min_snr_db[i],
+                    max_snr_db=bg_max_snr_db[i],
+                    audio_tar_filepaths=bg_noise_tar_filepaths[i],
+                    orig_sr=orig_sr,
+                )
+
+        self._apply_noise_rir = apply_noise_rir
+
+    def perturb(self, data, other_utterance, other_speaker):
+        prob = self._rng.uniform(0.0, 1.0)
+        orig_sr = data.orig_sr
+        if orig_sr not in self._fg_noise_perturbers:
+            orig_sr = max(self._fg_noise_perturbers.keys())
+        fg_perturber = self._fg_noise_perturbers[orig_sr]
+        noise = fg_perturber.get_one_noise_sample(data.sample_rate)
+
+        orig_sr = data.orig_sr
+        if orig_sr not in self._bg_noise_perturbers:
+            orig_sr = max(self._bg_noise_perturbers.keys())
+        bg_perturber = self._bg_noise_perturbers[orig_sr]
+        noise = bg_perturber.get_one_noise_sample(data.sample_rate)
+
+
+        if other_speaker:
+            # data overlap with other_speaker
+            fg_perturber.perturb_with_input_noise(
+                data, other_speaker, data_rms=data.rms_db
+            )
+
+        if prob < self._rir_prob:
+            self._rir_perturber.perturb(data)
+            self._rir_perturber.perturb(other_utterance)
+
+        if self._apply_noise_rir:
+            self._rir_perturber.perturb(noise)
+        fg_perturber.perturb_with_foreground_noise(
+            data, noise, data_rms=data.rms_db, max_noise_dur=self._max_duration, max_additions=self._max_additions
+        )
+        fg_perturber.perturb_with_foreground_noise(
+            other_utterance, noise, data_rms=other_utterance.rms_db, max_noise_dur=self._max_duration, max_additions=self._max_additions
+        )
+        bg_perturber.perturb_with_input_noise(data, noise, data_rms=data.rms_db)
+        bg_perturber.perturb_with_input_noise(other_utterance, noise, data_rms=other_utterance.rms_db)
+
+
+
 class TranscodePerturbation(Perturbation):
     """
         Audio codec augmentation. This implementation uses sox to transcode audio with low rate audio codecs,
@@ -692,6 +828,7 @@ perturbation_types = {
     "white_noise": WhiteNoisePerturbation,
     "rir_noise_aug": RirAndNoisePerturbation,
     "transcode_aug": TranscodePerturbation,
+    'rir_noise_speaker': RirNoiseSpeakerPerturbation
 }
 
 
@@ -709,10 +846,10 @@ class AudioAugmentor(object):
         self._rng = random.Random() if rng is None else rng
         self._pipeline = perturbations if perturbations is not None else []
 
-    def perturb(self, segment):
+    def perturb(self, segment, *args, **kwargs):
         for (prob, p) in self._pipeline:
             if self._rng.random() < prob:
-                p.perturb(segment)
+                p.perturb(segment, *args, **kwargs)
         return
 
     def max_augmentation_length(self, length):

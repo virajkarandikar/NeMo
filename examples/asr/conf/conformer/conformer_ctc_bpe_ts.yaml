@@ -27,13 +27,22 @@
 name: "Conformer-CTC-BPE"
 
 model:
+  speaker_embeddings:
+    feature_dim: 192
+    model_path: titanet_large # .nemo local model path or pretrained model name (titanet_large, ecapa_tdnn or speakerverification_speakernet)
+    parameters:
+      window_length_in_sec: 1.5 # Window length(s) in sec (floating-point number). Either a number or a list. Ex) 1.5 or [1.5,1.0,0.5]
+      shift_length_in_sec: 0.75 # Shift length(s) in sec (floating-point number). Either a number or a list. Ex) 0.75 or [0.75,0.5,0.25]
+      multiscale_weights: null # Weight for each scale. should be null (for single scale) or a list matched with window/shift scale count. Ex) [0.33,0.33,0.33]
+      save_embeddings: False # Save embeddings as pickle file for each audio input.
   sample_rate: 16000
   log_prediction: true # enables logging sample predictions in the output during training
   ctc_reduction: 'mean_batch'
-
   train_ds:
+    speaker_embeddings: ${model.speaker_embeddings}
+    speaker_embedding_manifest: None
     augmentor:
-      rir_noise_aug:
+      rir_noise_speaker:
         prob: 0.8
         rir_manifest_path: ???
         rir_tar_filepaths: None
@@ -69,6 +78,8 @@ model:
     bucketing_batch_size: null
 
   validation_ds:
+    speaker_embeddings: ${model.speaker_embeddings}
+    speaker_embedding_manifest: None
     manifest_filepath: ???
     sample_rate: ${model.sample_rate}
     batch_size: 16 # you may increase batch_size if your memory allows
@@ -78,6 +89,8 @@ model:
     use_start_end_token: false
 
   test_ds:
+    speaker_embeddings: ${model.speaker_embeddings}
+    speaker_embedding_manifest: None
     manifest_filepath: null
     sample_rate: ${model.sample_rate}
     batch_size: 16 # you may increase batch_size if your memory allows
