@@ -19,12 +19,14 @@ from typing import Callable, Dict, Iterable, List, Optional, Union
 
 import braceexpand
 import librosa
+from transformers import IBERT_PRETRAINED_MODEL_ARCHIVE_LIST
 import numpy as np
 import torch
 import webdataset as wd
 from scipy.stats import betabinom
 from torch.nn import functional as F
 from torch.utils.data import ChainDataset
+
 from nemo.collections.asr.parts.preprocessing.features import WaveformFeaturizer, WaveformFeaturizerAndEmbedding
 from nemo.collections.common.parts.preprocessing import collections, parsers
 from nemo.core.classes import Dataset, IterableDataset
@@ -96,7 +98,6 @@ def _speech_collate_fn(batch, pad_id):
         return audio_signal, audio_lengths, tokens, tokens_lengths, sample_ids
 
 
-
 def _speech_embedding_collate_fn(batch, pad_id):
     """collate batch of audio sig, audio len, tokens, tokens len
     Args:
@@ -147,7 +148,7 @@ def _speech_embedding_collate_fn(batch, pad_id):
     if has_audio:
         audio_signal = torch.stack(audio_signal)
         audio_lengths = torch.stack(audio_lengths)
-        all_embeddings  = torch.stack(all_embeddings)
+        all_embeddings = torch.stack(all_embeddings)
         embedding_lengths = torch.stack(embedding_lengths)
     else:
         audio_signal, audio_lengths, all_embeddings = None, None
@@ -158,6 +159,7 @@ def _speech_embedding_collate_fn(batch, pad_id):
     else:
         sample_ids = torch.tensor(sample_ids, dtype=torch.int32)
         return audio_signal, audio_lengths, tokens, tokens_lengths, all_embeddings, embedding_lengths, sample_ids
+
 
 class ASRManifestProcessor:
     """
@@ -189,19 +191,17 @@ class ASRManifestProcessor:
         eos_id: Optional[int] = None,
         pad_id: int = 0,
         *args,
-        **kwargs
+        **kwargs,
     ):
         self.parser = parser
-
         self.collection = collections.ASRAudioText(
             manifests_files=manifest_filepath,
             parser=parser,
             min_duration=min_duration,
             max_duration=max_duration,
             max_number=max_utts,
-            *args, 
-            **kwargs
-
+            *args,
+            **kwargs,
         )
         self.eos_id = eos_id
         self.bos_id = bos_id
@@ -275,7 +275,7 @@ class _AudioTextDataset(Dataset):
         pad_id: int = 0,
         return_sample_id: bool = False,
         *args,
-        **kwargs
+        **kwargs,
     ):
         if type(manifest_filepath) == str:
             manifest_filepath = manifest_filepath.split(",")
@@ -290,7 +290,7 @@ class _AudioTextDataset(Dataset):
             eos_id=eos_id,
             pad_id=pad_id,
             *args,
-            **kwargs
+            **kwargs,
         )
         self.featurizer = WaveformFeaturizer(sample_rate=sample_rate, int_values=int_values, augmentor=augmentor)
         self.trim = trim
@@ -976,7 +976,7 @@ class AudioToBPEDataset(_AudioTextDataset):
             trim=trim,
             return_sample_id=return_sample_id,
             *args,
-            **kwargs
+            **kwargs,
         )
 
 
@@ -1008,7 +1008,7 @@ class AudioAndEmbeddingToBPEDataset(AudioToBPEDataset):
         trim: bool = False,
         use_start_end_token: bool = True,
         return_sample_id: bool = False,
-        speaker_embedding_manifest: Optional[str]=None,
+        speaker_embedding_manifest: Optional[str] = None,
     ):
         super().__init__(
             manifest_filepath=manifest_filepath,
@@ -1024,14 +1024,16 @@ class AudioAndEmbeddingToBPEDataset(AudioToBPEDataset):
             return_sample_id=return_sample_id,
             index_by_speaker_id=True,
         )
-        
-        self.speaker_embeddings=None
+
+        self.speaker_embeddings = None
         if not speaker_embedding_manifest:
-            self.featurizer = WaveformFeaturizerAndEmbedding(sample_rate=sample_rate, int_values=int_values, augmentor=augmentor)  
+            self.featurizer = WaveformFeaturizerAndEmbedding(
+                sample_rate=sample_rate, int_values=int_values, augmentor=augmentor
+            )
         else:
             # load spaker embeddings from manifest
-            self.speaker_embeddings=None
-    
+            self.speaker_embeddings = None
+
     def __getitem__(self, index):
         sample = self.manifest_processor.collection[index]
         offset = sample.offset
@@ -1041,45 +1043,55 @@ class AudioAndEmbeddingToBPEDataset(AudioToBPEDataset):
 
         if self.speaker_embeddings is None:
             target_speaker = sample.speaker
-            if len(self.manifest_processor.collection.speaker_mapping[target_speaker])-1 == 0:
-                other_utterance_file=None
-                other_utterance_duration=None
+            if len(self.manifest_processor.collection.speaker_mapping[target_speaker]) - 1 == 0:
+                logging.warning("target speaker only has one utterance")
+                other_utterance_file = None
+                other_utterance_duration = None
             else:
-                i = np.random.randint(0, len(self.manifest_processor.collection.speaker_mapping[target_speaker])-1)
-                if i == self.manifest_processor.collection.speaker_mapping[target_speaker][i]:
+                i = np.random.randint(0, len(self.manifest_processor.collection.speaker_mapping[target_speaker]) - 1)
+                if index == self.manifest_processor.collection.speaker_mapping[target_speaker][i]:
                     i += 1
                 other_utterance_index = self.manifest_processor.collection.speaker_mapping[target_speaker][i]
-                other_utterance_file=self.manifest_processor.collection[other_utterance_index]
+                other_utterance_file = self.manifest_processor.collection[other_utterance_index]
                 other_utterance_duration = other_utterance_file.duration
-                other_utterance_file=other_utterance_file.audio_file
+                other_utterance_file = other_utterance_file.audio_file
 
-            if len(self.manifest_processor.collection.speaker_mapping)-1 == 0:
-                other_speaker_file=None
-                other_speaker_duration=None
+            if len(self.manifest_processor.collection.speaker_mapping) - 1 == 0:
+                other_speaker_file = None
+                other_speaker_duration = None
                 logging.warning("only one speaker in dataset")
             else:
-                i = np.random.choice(0, len(self.manifest_processor.collection.speaker_mapping)-1)
+                i = np.random.randint(0, len(self.manifest_processor.collection.speaker_mapping) - 1)
                 if sorted(self.manifest_processor.collection.speaker_mapping.keys())[i] == target_speaker:
                     i += 1
                 other_speaker_index = sorted(self.manifest_processor.collection.speaker_mapping.keys())[i]
-                other_speaker_file_index=np.random.choice(self.manifest_processor.collection.speaker_mapping[other_speaker_index])
+                other_speaker_file_index = np.random.choice(
+                    self.manifest_processor.collection.speaker_mapping[other_speaker_index]
+                )
                 other_speaker_file = self.manifest_processor.collection[other_speaker_file_index]
                 other_speaker_duration = other_speaker_file.duration
-                other_speaker_file=other_speaker_file.audio_file
+                other_speaker_file = other_speaker_file.audio_file
 
-                
             features, speaker_features = self.featurizer.process(
-                sample.audio_file, other_utterance_file=other_utterance_file, other_speaker_file=other_speaker_file, offset=offset, duration=sample.duration, other_utterance_duration=other_utterance_duration, other_speaker_duration=other_speaker_duration, trim=self.trim, orig_sr=sample.orig_sr
+                sample.audio_file,
+                other_utterance_file=other_utterance_file,
+                other_speaker_file=other_speaker_file,
+                offset=offset,
+                duration=sample.duration,
+                other_utterance_duration=other_utterance_duration,
+                other_speaker_duration=other_speaker_duration,
+                trim=self.trim,
+                orig_sr=sample.orig_sr,
             )
             speaker_embedding = speaker_features
         else:
             features = self.featurizer.process(
                 sample.audio_file, offset=offset, duration=sample.duration, trim=self.trim, orig_sr=sample.orig_sr
             )
-            speaker_embedding=self.speaker_embeddings[sample.speaker]
-        speaker_embedding=torch.tensor(speaker_embedding, dtype=torch.float)
+            speaker_embedding = self.speaker_embeddings[sample.speaker]
+        speaker_embedding = torch.tensor(speaker_embedding, dtype=torch.float)
         embed_len = torch.tensor(speaker_embedding.shape[0]).long()
-        
+
         f, fl = features, torch.tensor(features.shape[0]).long()
         t, tl = self.manifest_processor.process_text(index)
 
@@ -1093,6 +1105,7 @@ class AudioAndEmbeddingToBPEDataset(AudioToBPEDataset):
     def _collate_fn(self, batch):
         # to change
         return _speech_embedding_collate_fn(batch, pad_id=self.manifest_processor.pad_id)
+
 
 class _TarredAudioToTextDataset(IterableDataset):
     """

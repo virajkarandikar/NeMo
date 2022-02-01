@@ -131,6 +131,7 @@ def get_bpe_dataset(
     )
     return dataset
 
+
 def get_audio_embedding_bpe_dataset(
     config: dict, tokenizer: 'TokenizerSpec', augmentor: Optional['AudioAugmentor'] = None
 ) -> audio_to_text.AudioToBPEDataset:
@@ -157,9 +158,10 @@ def get_audio_embedding_bpe_dataset(
         trim=config.get('trim_silence', False),
         use_start_end_token=config.get('use_start_end_token', True),
         return_sample_id=config.get('return_sample_id', False),
-        speaker_embedding_manifest=config.get('speaker_embedding_path', None)
+        speaker_embedding_manifest=config.get('speaker_embedding_path', None),
     )
     return dataset
+
 
 def get_tarred_dataset(
     config: dict,

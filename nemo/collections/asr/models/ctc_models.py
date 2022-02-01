@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import copy
-from ipaddress import _IPAddressBase
 import json
 import os
 import tempfile
+from ipaddress import _IPAddressBase
 from math import ceil
 from typing import Dict, List, Optional, Union
 

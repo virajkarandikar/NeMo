@@ -13,23 +13,30 @@
 # limitations under the License.
 
 import copy
-from copyreg import dispatch_table
 import os
+from copyreg import dispatch_table
 from typing import Dict, Optional
 
 import torch
 from omegaconf import DictConfig, ListConfig, OmegaConf, open_dict
-from nemo.collections.asr.data.audio_to_text_dali import DALIOutputs
 
-from nemo.collections.asr.data import audio_to_text_dataset
+from nemo.collections.asr.data import audio_to_text_dataset, feature
+from nemo.collections.asr.data.audio_to_text_dali import DALIOutputs
 from nemo.collections.asr.losses.ctc import CTCLoss
 from nemo.collections.asr.metrics.wer_bpe import WERBPE
 from nemo.collections.asr.models.ctc_bpe_models import EncDecCTCModelBPE
-from nemo.collections.asr.data import feature
-from nemo.core.neural_types import AudioSignal, LabelsType, LengthsType, LogprobsType, NeuralType, SpectrogramType, AcousticEncodedRepresentation
 from nemo.collections.asr.models.label_models import EncDecSpeakerLabelModel
 from nemo.collections.asr.parts.preprocessing.perturb import process_augmentations
 from nemo.core.classes.common import PretrainedModelInfo, typecheck
+from nemo.core.neural_types import (
+    AcousticEncodedRepresentation,
+    AudioSignal,
+    LabelsType,
+    LengthsType,
+    LogprobsType,
+    NeuralType,
+    SpectrogramType,
+)
 from nemo.utils import logging, model_utils
 
 __all__ = ['TSEncDecCTCModelBPE']
@@ -38,10 +45,12 @@ __all__ = ['TSEncDecCTCModelBPE']
 class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
     """Encoder decoder CTC-based models with Byte Pair Encoding."""
 
-    def __init__(self,  *args, **kwargs,):
+    def __init__(
+        self, *args, **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.f1 = torch.nn.Linear(self._cfg.speaker_embeddings.feature_dim, self._cfg.encoder.d_model)
-        self.speaker_model=None
+        self.speaker_model = None
         if self._cfg.speaker_embeddings.model_path:
             self.speaker_model = EncDecSpeakerLabelModel.from_pretrained(self._cfg.speaker_embeddings.model_path)
 
@@ -65,7 +74,13 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
 
     @typecheck()
     def forward(
-        self, input_signal=None, input_signal_length=None, processed_signal=None, processed_signal_length=None, speaker_embedding=None, embedding_lengths=None
+        self,
+        input_signal=None,
+        input_signal_length=None,
+        processed_signal=None,
+        processed_signal_length=None,
+        speaker_embedding=None,
+        embedding_lengths=None,
     ):
         """
         Forward pass of the model.
@@ -107,7 +122,9 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
         if self.speaker_model:
             with torch.no_grad():
                 self.speaker_model.eval()
-                _, speaker_embedding = self.speaker_model.forward(input_signal=speaker_embedding, input_signal_length=embedding_lengths)
+                _, speaker_embedding = self.speaker_model.forward(
+                    input_signal=speaker_embedding, input_signal_length=embedding_lengths
+                )
                 speaker_embedding = speaker_embedding.detach()
         speaker_embedding = self.f1(speaker_embedding).unsqueeze(-1).repeat(1, 1, encoded.shape[2])
         encoded += speaker_embedding
@@ -123,7 +140,12 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
                 processed_signal=signal, processed_signal_length=signal_len, speaker_embedding=speaker_embedding
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, speaker_embedding=speaker_embedding, embedding_lengths=embedding_lengths)
+            log_probs, encoded_len, predictions = self.forward(
+                input_signal=signal,
+                input_signal_length=signal_len,
+                speaker_embedding=speaker_embedding,
+                embedding_lengths=embedding_lengths,
+            )
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
@@ -149,7 +171,6 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
 
         return {'loss': loss_value, 'log': tensorboard_logs}
 
-
     def validation_step(self, batch, batch_idx, dataloader_idx=0):
         signal, signal_len, transcript, transcript_len, speaker_embedding, embedding_lengths = batch
         if isinstance(batch, DALIOutputs) and batch.has_processed_signal:
@@ -157,7 +178,12 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
                 processed_signal=signal, processed_signal_length=signal_len
             )
         else:
-            log_probs, encoded_len, predictions = self.forward(input_signal=signal, input_signal_length=signal_len, speaker_embedding=speaker_embedding, embedding_lengths=embedding_lengths)
+            log_probs, encoded_len, predictions = self.forward(
+                input_signal=signal,
+                input_signal_length=signal_len,
+                speaker_embedding=speaker_embedding,
+                embedding_lengths=embedding_lengths,
+            )
 
         loss_value = self.loss(
             log_probs=log_probs, targets=transcript, input_lengths=encoded_len, target_lengths=transcript_len
@@ -173,7 +199,6 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
             'val_wer_denom': wer_denom,
             'val_wer': wer,
         }
-
 
     def _setup_dataloader_from_config(self, config: Optional[Dict]):
         if 'augmentor' in config:
@@ -221,11 +246,11 @@ class TSEncDecCTCModelBPE(EncDecCTCModelBPE):
             if 'manifest_filepath' in config and config['manifest_filepath'] is None:
                 logging.warning(f"Could not load dataset as `manifest_filepath` was None. Provided config : {config}")
                 return None
-            
+
             dataset = audio_to_text_dataset.get_audio_embedding_bpe_dataset(
                 config=config, tokenizer=self.tokenizer, augmentor=augmentor
             )
-        
+
         loader = torch.utils.data.DataLoader(
             dataset=dataset,
             batch_size=config['batch_size'],

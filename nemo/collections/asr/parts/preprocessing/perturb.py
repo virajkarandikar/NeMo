@@ -462,7 +462,9 @@ class NoisePerturbation(Perturbation):
         if not data_rms:
             data_rms = data.rms_db
 
-        noise_gain_db = min(data_rms - noise.rms_db - snr_db, self._max_gain_db if max_gain_db is None else max_gain_db)
+        noise_gain_db = min(
+            data_rms - noise.rms_db - snr_db, self._max_gain_db if max_gain_db is None else max_gain_db
+        )
         n_additions = self._rng.randint(1, max_additions)
 
         for i in range(n_additions):
@@ -623,10 +625,6 @@ class RirAndNoisePerturbation(Perturbation):
         bg_perturber.perturb_with_input_noise(data, noise, data_rms=data_rms)
 
 
-
-
-
-
 class RirNoiseSpeakerPerturbation(Perturbation):
     """
         RIR augmentation with additive foreground and background noise.
@@ -735,12 +733,9 @@ class RirNoiseSpeakerPerturbation(Perturbation):
         bg_perturber = self._bg_noise_perturbers[orig_sr]
         noise = bg_perturber.get_one_noise_sample(data.sample_rate)
 
-
         if other_speaker:
             # data overlap with other_speaker
-            fg_perturber.perturb_with_input_noise(
-                data, other_speaker, data_rms=data.rms_db
-            )
+            fg_perturber.perturb_with_input_noise(data, other_speaker, data_rms=data.rms_db)
 
         if prob < self._rir_prob:
             self._rir_perturber.perturb(data)
@@ -752,11 +747,14 @@ class RirNoiseSpeakerPerturbation(Perturbation):
             data, noise, data_rms=data.rms_db, max_noise_dur=self._max_duration, max_additions=self._max_additions
         )
         fg_perturber.perturb_with_foreground_noise(
-            other_utterance, noise, data_rms=other_utterance.rms_db, max_noise_dur=self._max_duration, max_additions=self._max_additions
+            other_utterance,
+            noise,
+            data_rms=other_utterance.rms_db,
+            max_noise_dur=self._max_duration,
+            max_additions=self._max_additions,
         )
         bg_perturber.perturb_with_input_noise(data, noise, data_rms=data.rms_db)
         bg_perturber.perturb_with_input_noise(other_utterance, noise, data_rms=other_utterance.rms_db)
-
 
 
 class TranscodePerturbation(Perturbation):
@@ -828,7 +826,7 @@ perturbation_types = {
     "white_noise": WhiteNoisePerturbation,
     "rir_noise_aug": RirAndNoisePerturbation,
     "transcode_aug": TranscodePerturbation,
-    'rir_noise_speaker': RirNoiseSpeakerPerturbation
+    'rir_noise_speaker': RirNoiseSpeakerPerturbation,
 }
 
 

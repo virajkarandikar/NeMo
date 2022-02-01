@@ -174,7 +174,9 @@ class AudioText(_Collection):
 
         if do_sort_by_duration:
             if index_by_file_id or index_by_speaker_id:
-                logging.warning("Tried to sort dataset by duration, but cannot since index_by_file_id or index_by_speaker_id is set.")
+                logging.warning(
+                    "Tried to sort dataset by duration, but cannot since index_by_file_id or index_by_speaker_id is set."
+                )
             else:
                 data.sort(key=lambda entity: entity.duration)
 

@@ -59,7 +59,6 @@ model:
         bg_noise_manifest_paths: ???
         bg_noise_tar_filepaths: None
     manifest_filepath: ???
-    embedding_filepath: None
     sample_rate: ${model.sample_rate}
     batch_size: 16 # you may increase batch_size if your memory allows
     shuffle: true
