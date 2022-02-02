@@ -16,9 +16,11 @@ from omegaconf.omegaconf import OmegaConf, open_dict
 from pytorch_lightning import Trainer
 
 from nemo.collections.nlp.models.language_modeling.megatron_gpt_model import MegatronGPTModel
+from nemo.collections.nlp.modules.common.megatron.megatron_utils import compute_model_parallel_rank
 from nemo.collections.nlp.parts.nlp_overrides import NLPDDPPlugin
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
+from nemo.utils.app_state import AppState
 from nemo.utils.exp_manager import exp_manager
 
 
@@ -154,7 +156,18 @@ def main(cfg) -> None:
     with open_dict(cfg):
         cfg.model.precision = cfg.trainer.precision
 
+    app_state = AppState()
+
+    if cfg.model.tensor_model_parallel_size > 1:
+        app_state.model_parallel_size = cfg.model.tensor_model_parallel_size
+        app_state.model_parallel_rank = compute_model_parallel_rank(
+                trainer.local_rank, 
+                app_state.model_parallel_size
+        ) 
+
     model = MegatronGPTModel.restore_from(cfg.restore_from_path, cfg.model, trainer=trainer)
+
+    logging.info(f'Now initializing new soft prompts {cfg.model.new_prompt_tags}')
 
     # Init all new prompts
     for idx, tag in enumerate(cfg.model.new_prompt_tags):
