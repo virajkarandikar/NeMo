@@ -231,10 +231,17 @@ class Embedding(MegatronModule):
         # Initialize the token-type embeddings.
         self.init_method(self.tokentype_embeddings.weight)
 
-    def forward(self, input_ids, position_ids, tokentype_ids=None):
+    def forward(self, input_ids, position_ids, tokentype_ids=None, word_embeddings_only=False, position_embeddings_only=False):
         # Embeddings.
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
+        
+        # Want word embeddings and position embeddings before addition for soft prompt initalization 
+        if word_embeddings_only:
+            return word_embeddings
+        elif position_embeddings_only:
+            return position_embeddings
+
         embeddings = words_embeddings + position_embeddings
         if tokentype_ids is not None:
             assert self.tokentype_embeddings is not None
@@ -451,7 +458,7 @@ class PromptTable(torch.nn.Module):
 
         self.prompt_table[prompt_tag] = prompt_embeddings
 
-    def init_prompt_from_text(self, prompt_tag, init_token_ids, word_embeddings, position_embeddings):
+    def init_prompt_from_text(self, prompt_tag, init_token_ids, embeddings):
         """Add new soft prompt to be tuned.
            Intialize prompt weights from existing embeddings from specific vocab tokens.
 
@@ -468,10 +475,11 @@ class PromptTable(torch.nn.Module):
         init_token_ids = init_token_ids[:num_prompt_tokens]
 
         # Use a copy of token embedding weights to initalize the prompt embeddings
-        device = next(word_embeddings.parameters()).device
-        embedding_weights = word_embeddings(torch.tensor(init_token_ids, device=device)).detach().clone()
+        # TODO: Need to broadcast the ids for the forward pass
+        device = next(embeddings.parameters()).device
+        embedding_weights = embeddings(torch.tensor(init_token_ids, device=device), word_embeddings_only=True).detach().clone()
         position_weights = (
-            position_embeddings(torch.tensor([i for i in range(self.num_prompt_tokens)], device=device))
+            embeddings(torch.tensor([i for i in range(self.num_prompt_tokens)], device=device), position_embeddings_only=True)
             .detach()
             .clone()
         )
@@ -842,6 +850,5 @@ class TransformerLanguageModel(MegatronModule):
         self.prompt_table.init_prompt_from_text(
             prompt_tag,
             init_token_ids,
-            word_embeddings=self.embedding.word_embeddings,
-            position_embeddings=self.embedding.position_embeddings,
+            embeddings=self.embedding,
         )
