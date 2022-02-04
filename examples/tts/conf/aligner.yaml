@@ -101,7 +101,7 @@ model:
       warmup_ratio: 0.35
 
 trainer:
-  gpus: 1
+  devices: 1
   max_epochs: ???
   num_nodes: 1
   accelerator: gpu
