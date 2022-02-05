@@ -1860,7 +1860,7 @@ pipeline {
       steps {
         sh "python examples/nlp/language_modeling/megatron_bert_pretraining.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.log_every_n_steps=1 \
         trainer.val_check_interval=10 \
         trainer.limit_val_batches=2 \
@@ -1887,7 +1887,7 @@ pipeline {
         model.data.data_prefix=[.5,/home/TestData/nlp/megatron_bert/data/bert/simple_wiki_bert_preproc_text_sentence,.5,/home/TestData/nlp/megatron_bert/data/bert/simple_wiki_bert_preproc_text_sentence]"
         sh "python examples/nlp/language_modeling/megatron_bert_pretraining.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.log_every_n_steps=1 \
         trainer.val_check_interval=10 \
         trainer.limit_val_batches=2 \
@@ -1927,7 +1927,7 @@ pipeline {
       steps {
         sh "python  examples/nlp/text_classification/ptune_text_classification.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.max_epochs=1 \
         +trainer.limit_val_batches=10 \
         +trainer.limit_train_batches=10 \
@@ -1955,7 +1955,7 @@ pipeline {
       steps {
         sh "python examples/nlp/language_modeling/megatron_gpt_pretraining.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.log_every_n_steps=1 \
         trainer.val_check_interval=10 \
         trainer.limit_val_batches=2 \
@@ -1983,7 +1983,7 @@ pipeline {
         model.data.data_prefix=[.5,/home/TestData/nlp/megatron_gpt/data/gpt/simple_wiki_gpt_preproc_text_document,.5,/home/TestData/nlp/megatron_gpt/data/gpt/simple_wiki_gpt_preproc_text_document]"
         sh "python examples/nlp/language_modeling/megatron_gpt_pretraining.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.log_every_n_steps=1 \
         trainer.val_check_interval=10 \
         trainer.limit_val_batches=2 \
@@ -2050,7 +2050,7 @@ pipeline {
 	sh "python examples/nlp/language_modeling/megatron_gpt_prompt_tuning.py \
 	   --config-name=megatron_gpt_config \
            trainer.devices=1 \
-           trainer.accelerator="gpu" \
+           trainer.accelerator=gpu \
 	   trainer.max_steps=10 \
 	   trainer.val_check_interval=1 \
 	   exp_manager.name='megatron_gpt125M_prompt_tuning' \
@@ -2140,7 +2140,7 @@ pipeline {
       steps {
         sh "python examples/nlp/language_modeling/megatron_t5_pretraining.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.log_every_n_steps=1 \
         trainer.val_check_interval=10 \
         trainer.limit_val_batches=2 \
@@ -2159,7 +2159,7 @@ pipeline {
         model.data.data_prefix=[.5,/home/TestData/nlp/megatron_t5/data/pile_val_small_bert_tokenizer_text_document,.5,/home/TestData/nlp/megatron_t5/data/pile_val_small_bert_tokenizer_text_document]"
         sh "python examples/nlp/language_modeling/megatron_t5_pretraining.py \
         trainer.devices=2 \
-        trainer.accelerator="gpu" \
+        trainer.accelerator=gpu \
         trainer.log_every_n_steps=1 \
         trainer.val_check_interval=10 \
         trainer.limit_val_batches=2 \
