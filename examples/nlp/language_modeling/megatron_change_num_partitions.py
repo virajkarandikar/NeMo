@@ -141,7 +141,7 @@ def main():
     tgt_tp_size = args.target_tensor_model_parallel_size
     cls = model_utils.import_class_by_path(args.model_class)
 
-    trainer = Trainer(plugins=NLPDDPPlugin(), accelerator="cpu", precision=precision)
+    trainer = Trainer(plugins=NLPDDPPlugin(), accelerator="gpu", precision=precision)
     app_state = AppState()
     app_state.data_parallel_rank = 0
     app_state.model_parallel_size = tp_size
@@ -156,7 +156,7 @@ def main():
 
         model.cfg.tensor_model_parallel_size = 1
         app_state.model_parallel_size = 1
-        trainer = Trainer(plugins=NLPDDPPlugin(), accelerator="cpu", precision=precision)
+        trainer = Trainer(plugins=NLPDDPPlugin(), accelerator="gpu", precision=precision)
         model = cls(model.cfg, trainer)
         model._save_restore_connector = NLPSaveRestoreConnector()
 
@@ -175,7 +175,7 @@ def main():
 
         model.cfg.tensor_model_parallel_size = tgt_tp_size
         app_state.model_parallel_size = tgt_tp_size
-        trainer = Trainer(plugins=NLPDDPPlugin(), accelerator="cpu", precision=precision)
+        trainer = Trainer(plugins=NLPDDPPlugin(), accelerator="gpu", precision=precision)
         model = cls(model.cfg, trainer)
         model._save_restore_connector = NLPSaveRestoreConnector()
 
