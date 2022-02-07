@@ -114,7 +114,9 @@ def main():
         args.precision = int(float(args.precision))
 
     # trainer required for restoring model parallel models
-    trainer = Trainer(plugins=NLPDDPPlugin(), devices=args.tensor_model_parallel_size, precision=args.precision, accelerator='gpu')
+    trainer = Trainer(
+        plugins=NLPDDPPlugin(), devices=args.tensor_model_parallel_size, precision=args.precision, accelerator='gpu'
+    )
 
     app_state = AppState()
     if args.tensor_model_parallel_size > 1:
