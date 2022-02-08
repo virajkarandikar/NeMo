@@ -147,9 +147,7 @@ def main(cfg) -> None:
     logging.info(f'\n{OmegaConf.to_yaml(cfg)}')
 
     plugins = [NLPDDPPlugin(num_nodes=cfg.trainer.num_nodes)]
-
     trainer = Trainer(plugins=plugins, **cfg.trainer)
-
     exp_manager(trainer, cfg.exp_manager)
 
     # hydra interpolation does not work here as the interpolation key is lost when PTL saves hparams
@@ -166,24 +164,6 @@ def main(cfg) -> None:
         ) 
 
     model = MegatronGPTModel.restore_from(cfg.restore_from_path, cfg.model, trainer=trainer)
-
-    logging.info(f'Now initializing new soft prompts {cfg.model.new_prompt_tags}')
-
-    # Init all new prompts
-    for idx, tag in enumerate(cfg.model.new_prompt_tags):
-        init_method = cfg.model.new_prompt_init_methods[idx]
-
-        if init_method == "text":
-            init_text = cfg.model.new_prompt_init_text[idx]
-            model.init_prompt_from_text(tag, init_text)
-
-        elif init_method == 'random':
-            model.init_prompt_from_random(tag)
-
-        else:
-            logging.info(f'\n Soft prompt init method {init_method} is not recognized, please use text or random')
-
-    logging.info(f'\nCurrent soft prompts include {model.get_prompt_table()}')
     trainer.fit(model)
 
 

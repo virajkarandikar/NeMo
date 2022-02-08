@@ -120,12 +120,17 @@ class MegatronGPTModel(NLPModel):
 
         if self.cfg.get('use_soft_prompts', False):
             self.use_soft_prompts = True
+            self.next_prompt_id = 0
             self.prompts_to_tune = set([])
             self.prompt_table = set([])
             self.num_prompt_tokens = cfg.get('num_prompt_tokens', 10)
 
             if self.cfg.get('existing_prompt_tags', None):
+                # Fill table with prev tuned prompt tags and their ids
                 self.prompt_table = set(self.cfg.existing_prompt_tags)
+
+                # Get max prompt id from table for starting point of new prompt ids
+                self.next_prompt_id = max(self.prompt_table, key=lambda x:x[1])[1]
 
         self.megatron_amp_o2 = cfg.get('megatron_amp_O2', False)
 
@@ -137,13 +142,13 @@ class MegatronGPTModel(NLPModel):
             # Model wrapper to convert both model and inputs to half precision
             self.model = Float16Module(module=self.model, precision=cfg.precision)
 
-    def forward(self, tokens, text_position_ids, attention_mask, labels, prompt_tags=None):
-        output_tensor = self.model(tokens, text_position_ids, attention_mask, labels=labels, prompt_tags=prompt_tags,)
+    def forward(self, tokens, text_position_ids, attention_mask, labels, prompt_ids=None):
+        output_tensor = self.model(tokens, text_position_ids, attention_mask, labels=labels, prompt_ids=prompt_ids)
         return output_tensor
 
     def training_step(self, batch, batch_idx):
         if self.use_soft_prompts:
-            tokens, labels, prompt_tags, attention_mask, loss_mask, text_position_ids = batch
+            tokens, labels, prompt_ids, attention_mask, loss_mask, text_position_ids = batch
 
             tokens = tokens.to(self.device)
             labels = labels.to(self.device)
@@ -151,7 +156,7 @@ class MegatronGPTModel(NLPModel):
             loss_mask = loss_mask.to(self.device)
             text_position_ids = text_position_ids.to(self.device)
 
-            output_tensor = self(tokens, text_position_ids, attention_mask, labels, prompt_tags)
+            output_tensor = self(tokens, text_position_ids, attention_mask, labels, prompt_ids)
         else:
             tokens, labels, loss_mask, attention_mask, position_ids = self.process_batch(batch)
             output_tensor = self(tokens, position_ids, attention_mask, labels)
@@ -218,7 +223,7 @@ class MegatronGPTModel(NLPModel):
 
     def validation_step(self, batch, batch_idx):
         if self.use_soft_prompts:
-            tokens, labels, prompt_tags, attention_mask, loss_mask, text_position_ids = batch
+            tokens, labels, prompt_ids, attention_mask, loss_mask, text_position_ids = batch
 
             tokens = tokens.to(self.device)
             labels = labels.to(self.device)
@@ -226,7 +231,7 @@ class MegatronGPTModel(NLPModel):
             loss_mask = loss_mask.to(self.device)
             text_position_ids = text_position_ids.to(self.device)
 
-            output_tensor = self(tokens, text_position_ids, attention_mask, labels, prompt_tags)
+            output_tensor = self(tokens, text_position_ids, attention_mask, labels, prompt_ids)
         else:
             tokens, labels, loss_mask, attention_mask, position_ids = self.process_batch(batch)
             output_tensor = self(tokens, position_ids, attention_mask, labels)
@@ -356,6 +361,7 @@ class MegatronGPTModel(NLPModel):
         dataset = GPTPromptTuningDataset(
             dataset_path=dataset_path,
             tokenizer=self.tokenizer,
+            prompt_table=self.prompt_table,
             num_prompt_tokens=self.cfg.num_prompt_tokens,
             max_seq_length=self.cfg.data.get('max_seq_length', 512),
             min_seq_length=self.cfg.data.get('min_seq_length', 1),
@@ -368,12 +374,31 @@ class MegatronGPTModel(NLPModel):
             batch_size=self.cfg.data.batch_size,
             collate_fn=dataset.collate_fn,
             num_workers=self.cfg.data.num_workers,
-            pin_memory=True,
+            pin_memory=False,
         )
 
         return dataset, dataloader
 
     def setup(self, stage=None):
+        if self.use_soft_prompts:
+            # Initalize soft prompts before loading datasets and training
+            for idx, tag in enumerate(self.cfg.new_prompt_tags):
+                init_method = self.cfg.new_prompt_init_methods[idx]
+
+                if init_method == "text":
+                    init_text = self.cfg.new_prompt_init_text[idx]
+                    self.init_prompt_from_text(tag, init_text)
+
+                elif init_method == 'random':
+                    model.init_prompt_from_random(tag)
+
+                else:
+                    raise AttributeError(f'\n Soft prompt init method {init_method} is not recognized\
+                                            please use text or random')
+
+            logging.info(f'New soft prompts have been intialized')
+            logging.info(f'Current soft prompts include {self.get_prompt_table()}')
+
         if stage == 'predict':
             return
         else:
@@ -618,7 +643,7 @@ class MegatronGPTModel(NLPModel):
                     )
 
                 # No labels during inference. Still need masks to not attend to the right
-                output_tensor = self(tokens, position_ids, attention_mask, prompt_tags=prompt_tags, labels=None)
+                output_tensor = self(tokens, position_ids, attention_mask, prompt_ids=prompt_ids, labels=None)
                 output_tensor = tensor_parallel.gather_from_tensor_model_parallel_region(output_tensor)
                 log_probs, token_ids = torch.max(logsoftmaxlayer(output_tensor), dim=-1)
                 reached_eos = token_ids[0, -1].item() == self.tokenizer.eos_id
@@ -691,7 +716,7 @@ class MegatronGPTModel(NLPModel):
                     reset_attention_mask=self.cfg.get('reset_attention_mask', False),
                     eod_mask_loss=self.cfg.get('eod_mask_loss', False),
                 )
-            output_tensor = self(tokens_cut, position_ids, attention_mask, prompt_tags=prompt_tags, labels=None)
+            output_tensor = self(tokens_cut, position_ids, attention_mask, prompt_ids=prompt_ids, labels=None)
             output_tensor = tensor_parallel.gather_from_tensor_model_parallel_region(output_tensor)
 
             log_probs = []
@@ -702,6 +727,7 @@ class MegatronGPTModel(NLPModel):
 
             for token, prob in zip(tokens, log_probs):
                 results.append((self.tokenizer.ids_to_text(token), self.tokenizer.ids_to_tokens(token), prob, [0]))
+
         # offsets calculation
         for item in results:
             for index, token in enumerate(item[1]):
@@ -716,13 +742,15 @@ class MegatronGPTModel(NLPModel):
         return response
 
     def init_prompt_from_random(self, prompt_tag):
-        self.model._init_prompt_from_random(prompt_tag)
-        self._add_prompt_tag(prompt_tag)
+        prompt_id = self._get_next_prompt_id()
+        self.model._init_prompt_from_random(prompt_tag, prompt_id)
+        self._add_prompt_tag(prompt_tag, prompt_id)
 
     def init_prompt_from_text(self, prompt_tag, init_text):
         init_token_ids = self.tokenizer.text_to_ids(init_text)
-        self.model._init_prompt_from_text(prompt_tag, init_token_ids)
-        self._add_prompt_tag(prompt_tag)
+        prompt_id = self._get_next_prompt_id()
+        self.model._init_prompt_from_text(prompt_tag, prompt_id, init_token_ids)
+        self._add_prompt_tag(prompt_tag, prompt_id)
 
     def get_prompt_table(self):
         if hasattr(self, 'prompt_table'):
@@ -731,11 +759,15 @@ class MegatronGPTModel(NLPModel):
     def list_available_models(self):
         return None
 
-    def _add_prompt_tag(self, prompt_tag):
+    def _get_next_prompt_id(self):
+        self.next_prompt_id += 1
+        return self.next_prompt_id
+
+    def _add_prompt_tag(self, prompt_tag, prompt_id):
         if not hasattr(self, 'prompt_table'):
             raise AttributeError('Please set "use_soft_prompts" in cfg to True')
 
-        self.prompt_table.add(prompt_tag)
+        self.prompt_table.add((prompt_tag, prompt_id))
         self.prompts_to_tune.add(prompt_tag)
 
         # Add new prompt tag to cfg for loading prompt table at inference

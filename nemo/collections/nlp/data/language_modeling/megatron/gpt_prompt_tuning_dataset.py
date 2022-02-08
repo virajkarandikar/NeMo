@@ -23,6 +23,7 @@ Expects data to be in the format:
 import json
 
 import torch
+from apex.transformer import tensor_parallel
 from tqdm import tqdm
 
 from nemo.core import Dataset
@@ -36,6 +37,7 @@ class GPTPromptTuningDataset(Dataset):
         self,
         dataset_path,
         tokenizer,
+        prompt_table,
         num_prompt_tokens: int,
         max_seq_length: int,
         min_seq_length: int = 1,
@@ -43,13 +45,14 @@ class GPTPromptTuningDataset(Dataset):
         calc_loss_on_answer_only=True,
     ):
         self.tokenizer = tokenizer
+        self.prompt_tag_to_id = dict(prompt_table)
         self.add_bos_eos = add_bos_eos
         self.calc_loss_on_answer_only = calc_loss_on_answer_only
         self.max_seq_length = max_seq_length
         self.min_seq_length = min_seq_length
         self.num_prompt_tokens = num_prompt_tokens
         self.max_sent_length = max_seq_length - num_prompt_tokens
-        self.tags_and_tokens = []
+        self.prompt_ids_and_tokens = []
 
         assert min_seq_length <= max_seq_length, "Min sequence length should be less than or equal to max"
         assert max_seq_length > 0, "Max sequence length should be greater than 0"
@@ -78,7 +81,8 @@ class GPTPromptTuningDataset(Dataset):
 
             # Need to leave space for prompt tokens in sequence
             if self.min_seq_length <= len(sent_ids) <= self.max_sent_length:
-                self.tags_and_tokens.append((prompt_tag, sent_ids, answer_len))
+                prompt_id = self.prompt_tag_to_id[prompt_tag]
+                self.prompt_ids_and_tokens.append((prompt_id, sent_ids, answer_len))
 
             else:
                 skipped += 1
@@ -86,15 +90,15 @@ class GPTPromptTuningDataset(Dataset):
         logging.info(f'Skipped {skipped} sentences, sequence length too long or too short')
 
     def __len__(self):
-        return len(self.tags_and_tokens)
+        return len(self.prompt_ids_and_tokens)
 
     def __getitem__(self, idx):
-        return self.tags_and_tokens[idx]
+        return self.prompt_ids_and_tokens[idx]
 
     def collate_fn(self, batch):
         """Build masks and position id for left to right model with prompt tuning."""
 
-        prompt_tags, input_ids, answer_lens = zip(*batch)
+        prompt_ids, input_ids, answer_lens = zip(*batch)
 
         # Get max sequence length of batch
         batch_size = len(input_ids)
@@ -129,31 +133,50 @@ class GPTPromptTuningDataset(Dataset):
             text_loss_mask.extend([0.0] * padding_length)
             loss_masks.append(torch.tensor(text_loss_mask, dtype=torch.float))
 
-        tokens = torch.tensor(input_ids, dtype=torch.long)
-        loss_mask = torch.stack(loss_masks)
+        # Broadcast data to all GPUs for tensor parallel
+        keys = ['text']
+        datatype = torch.int64
+        tokens = {'text': torch.tensor(input_ids, dtype=torch.int64)}
+        tokens_b = tensor_parallel.broadcast_data(keys, tokens, datatype)
+        tokens = tokens_b['text'].long()
+
+        loss_mask = torch.stack(loss_masks).to(device=tokens.device)
 
         # Position ids for text
-        text_position_ids = torch.arange(start=self.num_prompt_tokens, end=batch_max_with_prompt, dtype=torch.long,)
+        text_position_ids = torch.arange(
+                start=self.num_prompt_tokens, 
+                end=batch_max_with_prompt, 
+                dtype=torch.long,
+                device=tokens.device)
         text_position_ids = text_position_ids.unsqueeze(0).expand_as(tokens).clone()
 
         # Attention mask (lower triangular) starting with prompt tokens
-        attention_mask = torch.tril(torch.ones((batch_size, batch_max_with_prompt, batch_max_with_prompt))).view(
-            batch_size, 1, batch_max_with_prompt, batch_max_with_prompt
-        )
+        attention_mask = torch.tril(torch.ones((batch_size, batch_max_with_prompt, batch_max_with_prompt), 
+            device=tokens.device)
+        ).view(batch_size, 1, batch_max_with_prompt, batch_max_with_prompt)
 
         # Convert attention mask to binary:
         attention_mask = attention_mask < 0.5
 
         # Labels for prompt tokens
         prompt_token_labels = torch.full(
-            size=(batch_size, self.num_prompt_tokens), fill_value=self.tokenizer.bos_id, dtype=torch.long,
+            size=(batch_size, self.num_prompt_tokens), 
+            fill_value=self.tokenizer.bos_id, 
+            dtype=torch.long,
+            device=tokens.device,
         )
 
         # Should be a label for every token in batch
         labels = torch.cat((prompt_token_labels, tokens[:, 1:].contiguous()), dim=1)
-        final_label = torch.full(size=(batch_size, 1), fill_value=self.tokenizer.eos_id, dtype=torch.long,)
+        final_label = torch.full(
+                size=(batch_size, 1), 
+                fill_value=self.tokenizer.eos_id, 
+                dtype=torch.long, 
+                device=tokens.device
+        )
 
         # Last label should be eos, even for longest sequence in batch
         labels = torch.cat((labels, final_label), dim=1)
+        prompt_ids = torch.tensor(prompt_ids, device=tokens.device)
 
-        return tokens, labels, prompt_tags, attention_mask, loss_mask, text_position_ids
+        return tokens, labels, prompt_ids, attention_mask, loss_mask, text_position_ids
