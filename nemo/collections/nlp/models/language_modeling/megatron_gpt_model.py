@@ -28,6 +28,7 @@ from nemo.collections.nlp.data.language_modeling.megatron.data_samplers import (
     MegatronPretrainingSampler,
 )
 from nemo.collections.nlp.data.language_modeling.megatron.gpt_dataset import build_train_valid_test_datasets
+from nemo.collections.nlp.data.language_modeling.megatron.gpt_finetuning_dataset import GPTFineTuningDataset
 from nemo.collections.nlp.data.language_modeling.megatron.gpt_prompt_tuning_dataset import GPTPromptTuningDataset
 from nemo.collections.nlp.models.language_modeling.megatron.gpt_model import GPTModel
 from nemo.collections.nlp.models.nlp_model import NLPModel
@@ -126,6 +127,10 @@ class MegatronGPTModel(NLPModel):
             prompt_tags=cfg.get('existing_prompt_tags', None),
         )
 
+        self.finetune = False
+        if self.cfg.get('finetune', False):
+            self.finetune = True
+
         self.use_soft_prompts = False
 
         if self.cfg.get('use_soft_prompts', False):
@@ -162,6 +167,17 @@ class MegatronGPTModel(NLPModel):
             text_position_ids = text_position_ids.to(self.device)
 
             output_tensor = self(tokens, text_position_ids, attention_mask, labels, prompt_tags)
+
+        elif self.finetune:
+            tokens, labels, attention_mask, loss_mask, text_position_ids = batch
+
+            tokens = tokens.to(self.device)
+            labels = labels.to(self.device)
+            attention_mask = attention_mask.to(self.device)
+            loss_mask = loss_mask.to(self.device)
+            text_position_ids = text_position_ids.to(self.device)
+
+            output_tensor = self(tokens, text_position_ids, attention_mask, labels)
         else:
             tokens, labels, loss_mask, attention_mask, position_ids = self.process_batch(batch)
             output_tensor = self(tokens, position_ids, attention_mask, labels)
@@ -237,6 +253,18 @@ class MegatronGPTModel(NLPModel):
             text_position_ids = text_position_ids.to(self.device)
 
             output_tensor = self(tokens, text_position_ids, attention_mask, labels, prompt_tags)
+
+        elif self.finetune:
+            tokens, labels, attention_mask, loss_mask, text_position_ids = batch
+
+            tokens = tokens.to(self.device)
+            labels = labels.to(self.device)
+            attention_mask = attention_mask.to(self.device)
+            loss_mask = loss_mask.to(self.device)
+            text_position_ids = text_position_ids.to(self.device)
+
+            output_tensor = self(tokens, text_position_ids, attention_mask, labels)
+
         else:
             tokens, labels, loss_mask, attention_mask, position_ids = self.process_batch(batch)
             output_tensor = self(tokens, position_ids, attention_mask, labels)
@@ -291,7 +319,7 @@ class MegatronGPTModel(NLPModel):
         return tokens, labels, loss_mask, attention_mask, position_ids
 
     def build_train_valid_test_datasets(self):
-        if self.use_soft_prompts:
+        if self.use_soft_prompts or self.finetune:
             return
 
         logging.info('Building GPT datasets.')
@@ -367,10 +395,29 @@ class MegatronGPTModel(NLPModel):
             dataset_path=dataset_path,
             tokenizer=self.tokenizer,
             num_prompt_tokens=self.cfg.num_prompt_tokens,
-            max_seq_length=self.cfg.data.get('max_seq_length', 512),
+            max_seq_length=self.cfg.data.get('max_seq_length', 1024),
             min_seq_length=self.cfg.data.get('min_seq_length', 1),
             add_bos_eos=self.cfg.data.get('add_bos_eos', True),
             calc_loss_on_answer_only=self.cfg.get('calc_loss_on_answer_only', True),
+        )
+
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.cfg.data.batch_size,
+            collate_fn=dataset.collate_fn,
+            num_workers=self.cfg.data.num_workers,
+            pin_memory=True,
+        )
+
+        return dataset, dataloader
+
+    def build_fine_tuning_dataset(self, dataset_path):
+        dataset = GPTFineTuningDataset(
+            dataset_path=dataset_path,
+            tokenizer=self.tokenizer,
+            max_seq_length=self.cfg.data.get('max_seq_length', 1024),
+            min_seq_length=self.cfg.data.get('min_seq_length', 1),
+            add_bos_eos=self.cfg.data.get('add_bos_eos', True),
         )
 
         dataloader = torch.utils.data.DataLoader(
@@ -404,6 +451,12 @@ class MegatronGPTModel(NLPModel):
             # Freeze all weights except prompt embeddings
             self.prompt_tuning_freeze()
 
+        elif self.finetune:
+            if cfg.get('train_ds', None):
+                self._train_ds, self._train_dl = self.build_fine_tuning_dataset(self.cfg.data.train_ds)
+            else:
+                raise AttributeError('No prompt tuning train dataset was specified in the cfg file')
+
         elif hasattr(self, '_train_ds'):
             resume_checkpoint_path = self.trainer.checkpoint_connector.resume_from_checkpoint_fit_path
             if resume_checkpoint_path:
@@ -424,6 +477,12 @@ class MegatronGPTModel(NLPModel):
             else:
                 raise AttributeError('No prompt tuning validation dataset was specified in the cfg file')
 
+        elif self.finetune:
+            if cfg.get('valid_ds', None):
+                self._validation_ds, self._validation_dl = self.build_fine_tuning_dataset(self.cfg.data.valid_ds)
+            else:
+                raise AttributeError('No prompt tuning validation dataset was specified in the cfg file')
+
         elif hasattr(self, '_validation_ds'):
             consumed_samples = 0
             logging.info(
@@ -437,6 +496,13 @@ class MegatronGPTModel(NLPModel):
                 self._test_ds, self._test_dl = self.build_prompt_tuning_dataset(self.cfg.data.test_ds)
             else:
                 logging.info('No prompt tuning test dataset file provided in config, skipping')
+
+        elif self.finetune:
+            if cfg.get('test_ds', None):
+                self._test_ds, self._test_dl = self.build_fine_tuning_dataset(self.cfg.data.test_ds)
+            else:
+                logging.info('No prompt tuning test dataset file provided in config, skipping')
+
 
         elif hasattr(self, '_test_ds'):
             consumed_samples = 0
