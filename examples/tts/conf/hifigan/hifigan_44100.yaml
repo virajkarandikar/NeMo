@@ -33,7 +33,7 @@ defaults:
 model:
   preprocessor:
     _target_: nemo.collections.asr.modules.AudioToMelSpectrogramPreprocessor
-    nfilt: ${n_mel_channels}
+    features: ${n_mel_channels}
     lowfreq: ${lowfreq}
     highfreq: ${highfreq}
     n_fft: ${n_fft}
