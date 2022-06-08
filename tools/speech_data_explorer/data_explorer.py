@@ -190,8 +190,12 @@ def load_data(data_filename, disable_caching=False, estimate_audio=False, vocab=
             if 'pred_text' in item:
                 metrics_available = True
                 pred = item['pred_text'].split()
-                measures = jiwer.compute_measures(item['text'], item['pred_text'])
-                word_dist = measures['substitutions'] + measures['insertions'] + measures['deletions']
+                try:
+                    measures = jiwer.compute_measures(item['text'], item['pred_text'])
+                    word_dist = measures['substitutions'] + measures['insertions'] + measures['deletions']
+                except ValueError:
+                    measures = { "hits": 0, "substitutions": 0, "deletions": 0, "insertions": 0 }
+                    word_dist = editdistance.eval(item['text'], item['pred_text'])
                 char_dist = editdistance.eval(item['text'], item['pred_text'])
                 wer_dist += word_dist
                 cer_dist += char_dist
