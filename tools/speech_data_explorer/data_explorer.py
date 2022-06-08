@@ -223,9 +223,9 @@ def load_data(data_filename, disable_caching=False, estimate_audio=False, vocab=
                     num_words = 1e-9
                 if num_chars == 0:
                     num_chars = 1e-9
-                data[-1]['WER'] = round(word_dist / num_words * 100.0, 2)
-                data[-1]['CER'] = round(char_dist / num_chars * 100.0, 2)
-                data[-1]['WMR'] = round(measures['hits'] / num_words * 100.0, 2)
+                data[-1]['WER'] = round(word_dist / num_words * 100.0, 2) if num_words > 0 else 0.0
+                data[-1]['CER'] = round(char_dist / num_chars * 100.0, 2) if num_chars > 0 else 0.0
+                data[-1]['WMR'] = round(measures['hits'] / num_words * 100.0, 2) if num_words > 0 else 0.0
                 data[-1]['I'] = measures['insertions']
                 data[-1]['D'] = measures['deletions']
                 data[-1]['D-I'] = measures['deletions'] - measures['insertions']
