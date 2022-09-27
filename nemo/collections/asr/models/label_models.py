@@ -362,7 +362,7 @@ class EncDecSpeakerLabelModel(ModelPT, ExportableEncDecModel):
             path2audio_file: path to audio wav file
 
         Returns:
-            embs: speaker embeddings 
+            embs: speaker embeddings
         """
         audio, sr = librosa.load(path2audio_file, sr=None)
         target_sr = self._cfg.train_ds.get('sample_rate', 16000)
@@ -392,11 +392,11 @@ class EncDecSpeakerLabelModel(ModelPT, ExportableEncDecModel):
         Verify if two audio files are from the same speaker or not.
 
         Args:
-            path2audio_file1: path to audio wav file of speaker 1  
-            path2audio_file2: path to audio wav file of speaker 2 
+            path2audio_file1: path to audio wav file of speaker 1
+            path2audio_file2: path to audio wav file of speaker 2
             threshold: cosine similarity score used as a threshold to distinguish two embeddings (default = 0.7)
 
-        Returns:  
+        Returns:
             True if both audio files are from same speaker, False otherwise
         """
         embs1 = self.get_embedding(path2audio_file1).squeeze()
