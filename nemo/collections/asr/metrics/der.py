@@ -81,7 +81,7 @@ def score_labels(
         for (reference, hypothesis) in zip(all_reference, all_hypothesis):
             ref_key, ref_labels = reference
             _, hyp_labels = hypothesis
-            uem = AUDIO_RTTM_MAP[ref_key].get('uem_filepath', None)
+            uem = AUDIO_RTTM_MAP[ref_key].get('uem_filepath', None) if ref_key in AUDIO_RTTM_MAP else None
             if uem is not None:
                 uem = uem_timeline_from_file(uem_file=uem, uniq_name=ref_key)
             metric(ref_labels, hyp_labels, uem=uem, detailed=True)
