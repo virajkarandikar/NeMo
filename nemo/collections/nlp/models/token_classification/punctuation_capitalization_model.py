@@ -1029,7 +1029,7 @@ class PunctuationCapitalizationModel(NLPModel, Exportable):
         acc_prob = np.concatenate([acc_prob * update[: acc_prob.shape[0]], update[acc_prob.shape[0] :]], axis=0)
         return acc_prob
 
-    def _apply_punct_capit_predictions(self, query: str, punct_preds: List[int], capit_preds: List[int]) -> str:
+    def _apply_punct_capit_predictions(self, query: str, punct_preds: List[int], capit_preds: List[int], only_capitalise: bool=False) -> str:
         """
         Restores punctuation and capitalization in ``query``.
         Args:
@@ -1056,7 +1056,7 @@ class PunctuationCapitalizationModel(NLPModel, Exportable):
             if capit_label != self._cfg.common_dataset_parameters.pad_label:
                 word = word.capitalize()
             query_with_punct_and_capit += word
-            if punct_label != self._cfg.common_dataset_parameters.pad_label:
+            if not only_capitalise and punct_label != self._cfg.common_dataset_parameters.pad_label:
                 query_with_punct_and_capit += punct_label
             query_with_punct_and_capit += ' '
         return query_with_punct_and_capit[:-1]
@@ -1092,6 +1092,7 @@ class PunctuationCapitalizationModel(NLPModel, Exportable):
         step: int = 8,
         margin: int = 16,
         return_labels: bool = False,
+        only_capitalise: bool = False,
         dataloader_kwargs: Dict[str, Any] = None,
     ) -> List[str]:
         """
@@ -1195,7 +1196,7 @@ class PunctuationCapitalizationModel(NLPModel, Exportable):
                 result.append(
                     self._get_labels(all_punct_preds[i], all_capit_preds[i])
                     if return_labels
-                    else self._apply_punct_capit_predictions(query, all_punct_preds[i], all_capit_preds[i])
+                    else self._apply_punct_capit_predictions(query, all_punct_preds[i], all_capit_preds[i], only_capitalise)
                 )
         finally:
             # set mode back to its original value
