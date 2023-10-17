@@ -427,7 +427,10 @@ class SaveRestoreConnector:
                     # Note uuid.uuid4().hex is guaranteed to be 32 character long
                     artifact_base_name = os.path.basename(artiitem.path)
                     artifact_uniq_name = f"{uuid.uuid4().hex}_{artifact_base_name}"
-                    shutil.copy2(artiitem.path, os.path.join(nemo_file_folder, artifact_uniq_name))
+                    try:
+                        shutil.copy2(artiitem.path, os.path.join(nemo_file_folder, artifact_uniq_name))
+                    except:
+                        shutil.copy(artiitem.path, os.path.join(nemo_file_folder, artifact_uniq_name))
 
                     # Update artifacts registry
                     artiitem.hashed_path = "nemo:" + artifact_uniq_name
@@ -483,7 +486,10 @@ class SaveRestoreConnector:
                             artifact_base_name = os.path.basename(artiitem.path)
                         # no need to hash here as we are in tarfile_artifacts which are already hashed
                         artifact_uniq_name = artifact_base_name
-                        shutil.copy2(artifact_base_name, os.path.join(nemo_file_folder, artifact_uniq_name))
+                        try:
+                            shutil.copy2(artifact_base_name, os.path.join(nemo_file_folder, artifact_uniq_name))
+                        except:
+                            shutil.copy(artifact_base_name, os.path.join(nemo_file_folder, artifact_uniq_name))
 
                         # Update artifacts registry
                         new_artiitem = model_utils.ArtifactItem()
