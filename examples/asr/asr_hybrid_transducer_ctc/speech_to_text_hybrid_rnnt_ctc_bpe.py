@@ -65,6 +65,11 @@ from nemo.collections.asr.models import EncDecHybridRNNTCTCBPEModel
 from nemo.core.config import hydra_runner
 from nemo.utils import logging
 from nemo.utils.exp_manager import exp_manager
+from pytorch_lightning.plugins.environments import LightningEnvironment
+class MaglevEnvironment(LightningEnvironment):
+    def creates_children(self) -> bool:
+        logging.info(f"MaglevEnvironment: creates_children returning True")
+        return True
 
 
 @hydra_runner(
@@ -73,7 +78,10 @@ from nemo.utils.exp_manager import exp_manager
 def main(cfg):
     logging.info(f'Hydra config: {OmegaConf.to_yaml(cfg)}')
 
-    trainer = pl.Trainer(**cfg.trainer)
+    if int(cfg.trainer.num_nodes) > 1:
+        trainer = pl.Trainer(**cfg.trainer, plugins=[MaglevEnvironment()])
+    else:
+        trainer = pl.Trainer(**cfg.trainer)
     exp_manager(trainer, cfg.get("exp_manager", None))
     asr_model = EncDecHybridRNNTCTCBPEModel(cfg=cfg.model, trainer=trainer)
 
